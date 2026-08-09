@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocabulary Studio Pro - Quản lý & Học Từ vựng Đa Nền tảng</title>
+  <meta name="description" content="Ứng dụng hiện đại xem, quản lý và ôn tập từ vựng tiếng Trung với Flashcards, Trắc nghiệm và Phát âm AI.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div class="bg-glow-1"></div>
+  <div class="bg-glow-2"></div>
+
+  <!-- Header Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo-group">
+        <div class="logo-icon">📖</div>
+        <div>
+          <h1 class="logo-title">Vocabulary Studio</h1>
+          <p style="font-size: 0.75rem; color: var(--text-muted);">Quản lý & Học Từ Vựng Đa Nền Tảng</p>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-tab-btn active" data-tab="directory">
+          <span>📖</span> Danh sách
+        </button>
+        <button class="nav-tab-btn" data-tab="flashcards">
+          <span>🃏</span> Flashcards
+        </button>
+        <button class="nav-tab-btn" data-tab="quiz">
+          <span>🎯</span> Trắc nghiệm
+        </button>
+        <button class="nav-tab-btn" data-tab="stats">
+          <span>📊</span> Thống kê
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="openFileBtn" title="Chọn file JSON từ máy">
+          <span>📂</span> Mở File JSON
+        </button>
+        <button class="btn btn-primary" id="addWordBtn">
+          <span>+</span> Thêm từ
+        </button>
+        <button class="btn btn-icon" id="themeToggleBtn" title="Đổi giao diện Sáng/Tối">☀️</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    
+    <!-- File Status Bar -->
+    <div class="file-bar">
+      <div class="file-info">
+        <span class="file-badge">Đang mở:</span>
+        <span id="fileNameText" style="font-weight: 600;">Vocabulary</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button class="btn btn-secondary" id="exportJsonBtn" style="padding: 0.35rem 0.75rem; font-size: 0.82rem;" title="Xuất file JSON chuẩn">
+          💾 Xuất JSON
+        </button>
+        <button class="btn btn-secondary" id="exportCsvBtn" style="padding: 0.35rem 0.75rem; font-size: 0.82rem;" title="Xuất file Excel CSV">
+          📊 Xuất CSV
+        </button>
+        <button class="btn btn-secondary" id="loadSampleBtn" style="padding: 0.35rem 0.75rem; font-size: 0.82rem;" title="Dùng thử dữ liệu mẫu">
+          🔄 Dữ liệu mẫu
+        </button>
+        <span id="vocabStatsBadge" class="file-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-success);">
+          0 / 0 từ
+        </span>
+      </div>
+    </div>
+
+    <!-- TAB 1: DIRECTORY VIEW -->
+    <section id="tab-directory" class="tab-content-panel">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Tìm theo Từ, Pinyin, Hán Việt hoặc Nghĩa..." />
+        </div>
+
+        <div class="filter-group">
+          <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Sắp xếp:</span>
+          <select id="sortSelect" class="select-custom">
+            <option value="count-desc">🔥 Gặp nhiều nhất</option>
+            <option value="recent-desc">🕒 Gặp gần đây nhất</option>
+            <option value="az">🔤 Từ A - Z</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Vocab Grid -->
+      <div id="vocabGrid" class="vocab-grid"></div>
+    </section>
+
+    <!-- TAB 2: FLASHCARDS VIEW -->
+    <section id="tab-flashcards" class="tab-content-panel" style="display: none;">
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <h2>🃏 Thẻ Ghi Nhớ Flashcards</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.3rem;">Bấm vào thẻ để lật xem Pinyin, Hán Việt và Nghĩa</p>
+      </div>
+
+      <div class="flashcard-container">
+        <div class="flashcard" id="flashcardElement" onclick="toggleFlashcardFlip()">
+          <!-- Front Face -->
+          <div class="card-face card-front">
+            <button class="audio-btn" onclick="speakCurrentFlashcard(event)" style="position: absolute; top: 1.5rem; right: 1.5rem; width: 44px; height: 44px; font-size: 1.2rem;" title="Phát âm">🔊</button>
+            <div id="flashcardHanzi" class="flashcard-word">学习</div>
+            <div class="flashcard-hint">💡 Nhấp chuột để lật thẻ</div>
+          </div>
+
+          <!-- Back Face -->
+          <div class="card-face card-back">
+            <div>
+              <div id="flashcardPinyin" style="font-size: 1.8rem; font-weight: 700; color: var(--pinyin-color); margin-bottom: 0.5rem;">xué xí</div>
+              <div id="flashcardHanViet" style="font-size: 1.2rem; color: var(--hanviet-color); font-weight: 600; margin-bottom: 1.5rem;">[học tập]</div>
+            </div>
+            
+            <div id="flashcardMeaning" class="meaning-box" style="font-size: 1.15rem; max-width: 100%; width: 100%; text-align: center;">
+              học tập, nghiên cứu
+            </div>
+
+            <div id="flashcardProgress" style="font-size: 0.9rem; color: var(--text-muted); font-weight: 600;">1 / 10</div>
+          </div>
+        </div>
+
+        <div class="flashcard-controls">
+          <button class="btn btn-secondary" onclick="prevFlashcard()">◀ Thẻ trước</button>
+          <button class="btn btn-secondary" onclick="shuffleFlashcards()">🔀 Trộn ngẫu nhiên</button>
+          <button class="btn btn-primary" onclick="nextFlashcard()">Thẻ sau ▶</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: QUIZ VIEW -->
+    <section id="tab-quiz" class="tab-content-panel" style="display: none;">
+      <div class="quiz-box">
+        <div class="quiz-header">
+          <div>
+            <h3 style="font-size: 1.2rem;">🎯 Luyện Tập Trắc Nghiệm</h3>
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Chọn đáp án đúng nhất cho từ chữ Hán bên dưới</span>
+          </div>
+          <div style="display: flex; gap: 1rem; align-items: center;">
+            <span id="quizScoreText" style="font-weight: 700; color: var(--accent-success); font-size: 1rem;">Điểm: 0</span>
+            <span id="quizStreakText" style="font-weight: 700; color: var(--accent-warning); font-size: 1rem;">Chuỗi: 0 🔥</span>
+          </div>
+        </div>
+
+        <div class="quiz-question">
+          <div id="quizWordText" class="quiz-word">学习</div>
+          <div id="quizPinyinText" style="font-size: 1.2rem; color: var(--pinyin-color); font-weight: 600;">xué xí</div>
+        </div>
+
+        <div id="quizOptionsContainer" class="options-grid"></div>
+      </div>
+    </section>
+
+    <!-- TAB 4: STATS VIEW -->
+    <section id="tab-stats" class="tab-content-panel" style="display: none;">
+      <h2 style="margin-bottom: 1.5rem;">📊 Thống Kê Từ Vựng</h2>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📚</div>
+          <div>
+            <div id="statTotalWords" class="stat-val">0</div>
+            <div class="stat-lbl">Tổng số từ trong kho</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-success);">🔥</div>
+          <div>
+            <div id="statTotalCount" class="stat-val">0</div>
+            <div class="stat-lbl">Tổng lượt bắt gặp từ</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(251, 191, 36, 0.15); color: var(--accent-warning);">📈</div>
+          <div>
+            <div id="statAvgFreq" class="stat-val">0</div>
+            <div class="stat-lbl">Tần suất trung bình</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 1.75rem;">
+        <h3 style="margin-bottom: 1.25rem;">🏆 Top 10 Từ Bắt Gặp Nhiều Nhất</h3>
+        <div id="top10Chart"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Word Editor Modal -->
+  <div id="wordModalOverlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modalTitle">Thêm Từ Vựng Mới</h3>
+        <button class="mini-btn" id="closeModalBtn" style="font-size: 1.2rem;">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Từ (Chữ Hán) *</label>
+          <input type="text" id="txtWord" class="form-input" placeholder="Ví dụ: 学习" />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Pinyin</label>
+            <input type="text" id="txtPinyin" class="form-input" placeholder="Ví dụ: xué xí" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Hán Việt</label>
+            <input type="text" id="txtHanViet" class="form-input" placeholder="Ví dụ: học tập" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Số lần gặp</label>
+          <input type="number" id="txtCount" class="form-input" value="1" min="1" />
+        </div>
+
+        <div style="border-top: 1px solid var(--border-color); margin: 1.25rem 0 1rem 0; padding-top: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <label class="form-label" style="margin-bottom: 0;">Danh sách Nét Nghĩa</label>
+            <button type="button" class="btn btn-secondary" id="addMeaningRowBtn" style="padding: 0.3rem 0.7rem; font-size: 0.8rem;">
+              + Thêm nét nghĩa
+            </button>
+          </div>
+          <div id="meaningsContainer"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelModalBtn">Hủy</button>
+        <button class="btn btn-primary" id="saveWordBtn">💾 Lưu Lại</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInputHidden" accept=".json" style="display: none;" />
+
+  <script src="app.js"></script>
+</body>
+</html>
