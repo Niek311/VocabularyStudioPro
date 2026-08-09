@@ -1,18 +1,19 @@
 /**
- * Vocabulary Studio Pro - Standalone JavaScript Application Engine
+ * Vocabulary Studio Pro - iOS Edition Application Engine
+ * Supports: PWA Offline, iOS HIG Design, Touch Swipe Flashcards, Chinese Speech TTS, Quiz & Data Sync
  */
 
-// Initial State
+// Initial Application State
 let vocabState = {
   version: 1,
   vocabulary: {},
-  sourceFileName: 'Default Vocabulary',
-  activeTab: 'directory', // directory, flashcards, quiz, stats
-  theme: localStorage.getItem('vocab_theme') || 'dark',
+  sourceFileName: 'Vocabulary',
+  activeTab: 'directory',
+  theme: localStorage.getItem('ios_vocab_theme') || 'dark',
   searchQuery: '',
-  sortBy: 'count-desc', // count-desc, recent-desc, az
+  sortBy: 'count-desc',
   editingWord: null,
-  
+
   // Flashcards state
   flashcardIndex: 0,
   flashcardFlipped: false,
@@ -24,10 +25,16 @@ let vocabState = {
   quizTotal: 0,
   quizStreak: 0,
   quizAnswered: false,
-  selectedAnswer: null
+
+  // Touch Swipe State
+  isDragging: false,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0
 };
 
-// Sample fallback vocabulary for instant demo
+// Rich Default Sample Vocabulary (Chinese HSK / Common words)
 const SAMPLE_VOCABULARY = {
   "version": 1,
   "vocabulary": {
@@ -78,650 +85,707 @@ const SAMPLE_VOCABULARY = {
       "pinyin": "xué xí",
       "han_viet": "học tập",
       "meaning": "học tập, nghiên cứu"
+    },
+    "成功": {
+      "count": 10,
+      "first_seen": "2026-07-22T09:15:00.000Z",
+      "last_seen": "2026-08-07T11:45:00.000Z",
+      "pinyin": "chéng gōng",
+      "han_viet": "thành công",
+      "meaning": "thành công, đạt kết quả"
+    },
+    "希望": {
+      "count": 6,
+      "first_seen": "2026-07-21T10:00:00.000Z",
+      "last_seen": "2026-08-06T18:20:00.000Z",
+      "pinyin": "xī wàng",
+      "han_viet": "hi vọng",
+      "meaning": "hy vọng, mong muốn"
     }
   }
 };
 
-// Initialization
+// Application Initialization
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
-  loadDataFromLocalStorage();
+  loadData();
+  bindNavigation();
   bindEvents();
+  initTouchSwipe();
+  registerServiceWorker();
   renderApp();
 });
+
+// Register Service Worker for PWA
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('[SW] Registered successfully:', reg.scope))
+      .catch(err => console.warn('[SW] Registration failed:', err));
+  }
+}
 
 // Theme Management
 function initTheme() {
   document.documentElement.setAttribute('data-theme', vocabState.theme);
-  updateThemeIcon();
 }
 
 function toggleTheme() {
   vocabState.theme = vocabState.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('ios_vocab_theme', vocabState.theme);
   document.documentElement.setAttribute('data-theme', vocabState.theme);
-  localStorage.setItem('vocab_theme', vocabState.theme);
-  updateThemeIcon();
 }
 
-function updateThemeIcon() {
-  const btn = document.getElementById('themeToggleBtn');
-  if (btn) {
-    btn.innerHTML = vocabState.theme === 'dark' ? '☀️' : '🌙';
-    btn.title = vocabState.theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối';
-  }
-}
-
-// LocalStorage Persistence
-function loadDataFromLocalStorage() {
-  const saved = localStorage.getItem('vocab_studio_data');
+// Data Persistence
+function loadData() {
+  const saved = localStorage.getItem('ios_vocab_data');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (parsed && parsed.vocabulary) {
-        vocabState.vocabulary = parsed.vocabulary;
-        vocabState.version = parsed.version || 1;
-        vocabState.sourceFileName = localStorage.getItem('vocab_studio_filename') || 'Dữ liệu đã lưu';
-        return;
-      }
+      vocabState.vocabulary = parsed.vocabulary || {};
+      vocabState.sourceFileName = parsed.sourceFileName || 'Vocabulary';
     } catch (e) {
-      console.error("Lỗi đọc dữ liệu từ LocalStorage:", e);
+      console.error('Error parsing stored data:', e);
+      vocabState.vocabulary = SAMPLE_VOCABULARY.vocabulary;
     }
+  } else {
+    vocabState.vocabulary = SAMPLE_VOCABULARY.vocabulary;
   }
-  // Default to sample if empty
-  vocabState.vocabulary = { ...SAMPLE_VOCABULARY.vocabulary };
-  vocabState.sourceFileName = 'Từ vựng Mẫu';
 }
 
-function saveDataToLocalStorage() {
-  const obj = {
+function saveData() {
+  const payload = {
     version: vocabState.version,
+    sourceFileName: vocabState.sourceFileName,
     vocabulary: vocabState.vocabulary
   };
-  localStorage.setItem('vocab_studio_data', JSON.stringify(obj));
-  localStorage.setItem('vocab_studio_filename', vocabState.sourceFileName);
+  localStorage.setItem('ios_vocab_data', JSON.stringify(payload));
+  updateStatsHeader();
 }
 
-// Audio Speech Synthesis (Chinese TTS)
-function speakWord(text) {
-  if (!('speechSynthesis' in window)) {
-    alert("Trình duyệt của bạn không hỗ trợ đọc âm thanh (Speech Synthesis).");
-    return;
-  }
-  window.speechSynthesis.cancel(); // Stop ongoing speech
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'zh-CN';
-  utterance.rate = 0.85; // Slightly slower for language learning clarity
-  window.speechSynthesis.speak(utterance);
-}
-
-// Binding Main UI Events
-function bindEvents() {
-  // Theme Toggle
-  document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
-
-  // Nav Tabs
-  document.querySelectorAll('.nav-tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const tab = e.currentTarget.dataset.tab;
-      switchTab(tab);
+// Navigation Handler
+function bindNavigation() {
+  const navBtns = document.querySelectorAll('.ios-bottom-nav .nav-item');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.getAttribute('data-tab');
+      switchTab(targetTab);
     });
   });
+}
+
+function switchTab(tabName) {
+  vocabState.activeTab = tabName;
+  
+  // Update Nav Items
+  document.querySelectorAll('.ios-bottom-nav .nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+  });
+
+  // Update View Panels
+  document.querySelectorAll('.tab-view').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `view-${tabName}`);
+  });
+
+  // Trigger tab-specific renders
+  if (tabName === 'directory') renderDirectory();
+  if (tabName === 'flashcards') prepareFlashcards();
+  if (tabName === 'quiz') generateQuizQuestion();
+  if (tabName === 'stats') renderStats();
+}
+
+// Event Bindings
+function bindEvents() {
+  // Theme Toggle
+  document.getElementById('themeToggleBtn')?.addEventListener('click', toggleTheme);
 
   // Search & Filter
   const searchInput = document.getElementById('searchInput');
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      vocabState.searchQuery = e.target.value.trim().toLowerCase();
-      renderDirectoryView();
-    });
-  }
-
-  const sortSelect = document.getElementById('sortSelect');
-  if (sortSelect) {
-    sortSelect.addEventListener('change', (e) => {
-      vocabState.sortBy = e.target.value;
-      renderDirectoryView();
-    });
-  }
-
-  // File Actions
-  document.getElementById('openFileBtn').addEventListener('click', () => {
-    document.getElementById('fileInputHidden').click();
+  const clearBtn = document.getElementById('clearSearchBtn');
+  
+  searchInput?.addEventListener('input', (e) => {
+    vocabState.searchQuery = e.target.value;
+    clearBtn.style.display = vocabState.searchQuery ? 'flex' : 'none';
+    renderDirectory();
   });
 
-  document.getElementById('fileInputHidden').addEventListener('change', handleFileSelect);
-  document.getElementById('exportJsonBtn').addEventListener('click', exportJsonFile);
-  document.getElementById('exportCsvBtn').addEventListener('click', exportCsvFile);
-  document.getElementById('addWordBtn').addEventListener('click', () => openWordModal());
-  document.getElementById('loadSampleBtn').addEventListener('click', loadSampleData);
+  clearBtn?.addEventListener('click', () => {
+    searchInput.value = '';
+    vocabState.searchQuery = '';
+    clearBtn.style.display = 'none';
+    renderDirectory();
+  });
 
-  // Drag & Drop
-  const body = document.body;
-  body.addEventListener('dragover', (e) => e.preventDefault());
-  body.addEventListener('drop', (e) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processJsonFile(e.dataTransfer.files[0]);
+  document.getElementById('sortSelect')?.addEventListener('change', (e) => {
+    vocabState.sortBy = e.target.value;
+    renderDirectory();
+  });
+
+  // Modal Open/Close
+  document.getElementById('openAddWordModalBtn')?.addEventListener('click', () => openWordModal());
+  document.getElementById('closeModalBtn')?.addEventListener('click', closeWordModal);
+  document.getElementById('cancelModalBtn')?.addEventListener('click', closeWordModal);
+
+  // Form Submit
+  document.getElementById('wordForm')?.addEventListener('submit', handleWordFormSubmit);
+
+  // File Import / Export
+  document.getElementById('importJsonFile')?.addEventListener('change', handleFileImport);
+  document.getElementById('settingsImportJsonFile')?.addEventListener('change', handleFileImport);
+  document.getElementById('exportJsonBtn')?.addEventListener('click', exportDataJson);
+  document.getElementById('settingsExportJsonBtn')?.addEventListener('click', exportDataJson);
+  document.getElementById('loadSampleDataBtn')?.addEventListener('click', () => {
+    if (confirm('Tải dữ liệu mẫu sẽ bổ sung từ vựng mới vào danh sách. Tiếp tục?')) {
+      vocabState.vocabulary = { ...vocabState.vocabulary, ...SAMPLE_VOCABULARY.vocabulary };
+      saveData();
+      renderApp();
+      alert('Đã tải dữ liệu mẫu thành công!');
     }
   });
 
-  // Modal Controls
-  document.getElementById('closeModalBtn').addEventListener('click', closeWordModal);
-  document.getElementById('cancelModalBtn').addEventListener('click', closeWordModal);
-  document.getElementById('saveWordBtn').addEventListener('click', saveWordFromModal);
-  document.getElementById('addMeaningRowBtn').addEventListener('click', () => addMeaningInputRow(''));
-}
-
-// Tab Switching
-function switchTab(tabName) {
-  vocabState.activeTab = tabName;
-  document.querySelectorAll('.nav-tab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tabName);
+  // Flashcards Controls
+  document.getElementById('fcFlipBtn')?.addEventListener('click', flipFlashcard);
+  document.getElementById('fcPassBtn')?.addEventListener('click', () => passFlashcard(true));
+  document.getElementById('fcReviewBtn')?.addEventListener('click', () => passFlashcard(false));
+  document.getElementById('fcAudioBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const currentWord = vocabState.flashcardList[vocabState.flashcardIndex];
+    if (currentWord) speakChinese(currentWord.hanzi);
   });
 
-  document.querySelectorAll('.tab-content-panel').forEach(panel => {
-    panel.style.display = panel.id === `tab-${tabName}` ? 'block' : 'none';
+  // Quiz Controls
+  document.getElementById('nextQuizBtn')?.addEventListener('click', generateQuizQuestion);
+  document.getElementById('quizAudioBtn')?.addEventListener('click', () => {
+    if (vocabState.quizCurrentQuestion) speakChinese(vocabState.quizCurrentQuestion.hanzi);
   });
-
-  if (tabName === 'directory') renderDirectoryView();
-  if (tabName === 'flashcards') initFlashcardView();
-  if (tabName === 'quiz') initQuizView();
-  if (tabName === 'stats') renderStatsView();
 }
 
-// Main Render Dispatcher
+// Master Render
 function renderApp() {
-  document.getElementById('fileNameText').innerText = vocabState.sourceFileName;
-  switchTab(vocabState.activeTab);
+  updateStatsHeader();
+  renderDirectory();
+  prepareFlashcards();
 }
 
-// --- DIRECTORY VIEW ---
-function getFilteredAndSortedRows() {
-  const words = Object.keys(vocabState.vocabulary);
-  let rows = words.map(word => {
-    const info = vocabState.vocabulary[word] || {};
-    return {
-      word,
-      pinyin: info.pinyin || '',
-      han_viet: info.han_viet || '',
-      meaning: info.meaning || '',
-      count: info.count || 1,
-      first_seen: info.first_seen || '',
-      last_seen: info.last_seen || ''
-    };
-  });
+function updateStatsHeader() {
+  const count = Object.keys(vocabState.vocabulary).length;
+  const countBadge = document.getElementById('vocabCountBadge');
+  if (countBadge) countBadge.textContent = `${count} từ vựng`;
+  
+  const fileNameEl = document.getElementById('currentFileName');
+  if (fileNameEl) fileNameEl.textContent = vocabState.sourceFileName;
+}
 
-  // Filter
-  if (vocabState.searchQuery) {
-    const q = vocabState.searchQuery;
-    rows = rows.filter(r => 
-      r.word.toLowerCase().includes(q) ||
-      r.pinyin.toLowerCase().includes(q) ||
-      r.han_viet.toLowerCase().includes(q) ||
-      r.meaning.toLowerCase().includes(q)
+/* ==========================================================================
+   VIEW 1: DIRECTORY RENDERER
+   ========================================================================== */
+function getFilteredAndSortedVocab() {
+  let entries = Object.entries(vocabState.vocabulary).map(([hanzi, details]) => ({
+    hanzi,
+    ...details
+  }));
+
+  // Search Filter
+  if (vocabState.searchQuery.trim()) {
+    const q = vocabState.searchQuery.toLowerCase().trim();
+    entries = entries.filter(item => 
+      item.hanzi.toLowerCase().includes(q) ||
+      (item.pinyin && item.pinyin.toLowerCase().includes(q)) ||
+      (item.han_viet && item.han_viet.toLowerCase().includes(q)) ||
+      (item.meaning && item.meaning.toLowerCase().includes(q))
     );
   }
 
-  // Sort
-  if (vocabState.sortBy === 'count-desc') {
-    rows.sort((a, b) => b.count - a.count);
-  } else if (vocabState.sortBy === 'recent-desc') {
-    rows.sort((a, b) => new Date(b.last_seen || 0) - new Date(a.last_seen || 0));
-  } else if (vocabState.sortBy === 'az') {
-    rows.sort((a, b) => a.word.localeCompare(b.word, 'zh'));
-  }
+  // Sorting
+  entries.sort((a, b) => {
+    if (vocabState.sortBy === 'count-desc') {
+      return (b.count || 0) - (a.count || 0);
+    } else if (vocabState.sortBy === 'recent-desc') {
+      const timeA = a.last_seen ? new Date(a.last_seen).getTime() : 0;
+      const timeB = b.last_seen ? new Date(b.last_seen).getTime() : 0;
+      return timeB - timeA;
+    } else if (vocabState.sortBy === 'az') {
+      return a.hanzi.localeCompare(b.hanzi, 'zh-Hans');
+    }
+    return 0;
+  });
 
-  return rows;
+  return entries;
 }
 
-function renderDirectoryView() {
-  const gridContainer = document.getElementById('vocabGrid');
-  const rows = getFilteredAndSortedRows();
-  const totalCount = Object.keys(vocabState.vocabulary).length;
+function renderDirectory() {
+  const container = document.getElementById('vocabListContainer');
+  const emptyState = document.getElementById('emptyListState');
+  if (!container) return;
 
-  document.getElementById('vocabStatsBadge').innerText = `${rows.length} / ${totalCount} từ`;
+  const list = getFilteredAndSortedVocab();
 
-  if (rows.length === 0) {
-    gridContainer.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
-        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
-        <h3>Không tìm thấy từ vựng nào</h3>
-        <p style="font-size: 0.9rem; margin-top: 0.5rem;">Hãy thử từ khóa khác hoặc bấm "+ Thêm từ mới"</p>
-      </div>
-    `;
+  if (list.length === 0) {
+    container.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
 
-  gridContainer.innerHTML = rows.map(r => `
-    <div class="vocab-card fade-in">
-      <div>
-        <div class="card-top">
-          <div class="word-hanzi">${escapeHtml(r.word)}</div>
-          <button class="audio-btn" onclick="speakWord('${escapeJsStr(r.word)}')" title="Phát âm tiếng Trung">🔊</button>
-        </div>
-        
-        <div class="card-phonetics">
-          ${r.pinyin ? `<span class="pinyin-badge">${escapeHtml(r.pinyin)}</span>` : ''}
-          ${r.han_viet ? `<span class="hanviet-badge">[${escapeHtml(r.han_viet)}]</span>` : ''}
-        </div>
+  emptyState.style.display = 'none';
 
-        <div class="meaning-box">
-          ${formatMeaningText(r.meaning)}
+  container.innerHTML = list.map(item => `
+    <div class="ios-vocab-card" onclick="editWord('${escapeHtml(item.hanzi)}')">
+      <div class="vocab-left-side">
+        <div class="vocab-hanzi">${escapeHtml(item.hanzi)}</div>
+        <div class="vocab-info">
+          <div class="vocab-pinyin">${escapeHtml(item.pinyin || '')}</div>
+          <div class="vocab-meaning">${escapeHtml(item.meaning || '')}</div>
+          ${item.han_viet ? `<div class="vocab-hanviet">Hán Việt: ${escapeHtml(item.han_viet)}</div>` : ''}
         </div>
       </div>
-
-      <div class="card-footer">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span class="count-pill">Gặp ${r.count} lần</span>
-        </div>
-        <div class="card-actions">
-          <button class="mini-btn" onclick="openWordModal('${escapeJsStr(r.word)}')" title="Sửa từ">✏️</button>
-          <button class="mini-btn" onclick="deleteWord('${escapeJsStr(r.word)}')" title="Xóa từ" style="color: var(--accent-danger);">🗑️</button>
+      <div class="vocab-right-side">
+        <span class="vocab-count-tag">${item.count || 1} lần</span>
+        <div class="vocab-card-actions">
+          <button class="ios-audio-btn" onclick="event.stopPropagation(); speakChinese('${escapeHtml(item.hanzi)}')" title="Phát âm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          </button>
+          <button class="ios-action-icon-btn" onclick="event.stopPropagation(); deleteWord('${escapeHtml(item.hanzi)}')" title="Xóa từ">
+            🗑️
+          </button>
         </div>
       </div>
     </div>
   `).join('');
 }
 
-function formatMeaningText(meaning) {
-  if (!meaning) return '<span style="color: var(--text-muted); italic;">Chưa có nghĩa</span>';
-  const parts = meaning.split(';').map(p => p.trim()).filter(Boolean);
-  if (parts.length > 1) {
-    return parts.map(p => `<div>${escapeHtml(p)}</div>`).join('');
-  }
-  return escapeHtml(meaning);
-}
+/* ==========================================================================
+   VIEW 2: TOUCH SWIPE FLASHCARDS
+   ========================================================================== */
+function prepareFlashcards() {
+  vocabState.flashcardList = Object.entries(vocabState.vocabulary).map(([hanzi, data]) => ({
+    hanzi,
+    ...data
+  }));
 
-// --- WORD EDITOR MODAL ---
-function openWordModal(wordToEdit = null) {
-  vocabState.editingWord = wordToEdit;
-  const modalTitle = document.getElementById('modalTitle');
-  const txtWord = document.getElementById('txtWord');
-  const txtPinyin = document.getElementById('txtPinyin');
-  const txtHanViet = document.getElementById('txtHanViet');
-  const txtCount = document.getElementById('txtCount');
-  const meaningsContainer = document.getElementById('meaningsContainer');
-
-  meaningsContainer.innerHTML = '';
-
-  if (wordToEdit && vocabState.vocabulary[wordToEdit]) {
-    const data = vocabState.vocabulary[wordToEdit];
-    modalTitle.innerText = 'Chỉnh Sửa Từ Vựng';
-    txtWord.value = wordToEdit;
-    txtWord.disabled = true; // Key cannot be edited
-    txtPinyin.value = data.pinyin || '';
-    txtHanViet.value = data.han_viet || '';
-    txtCount.value = data.count || 1;
-
-    // Parse meanings
-    const rawMeaning = data.meaning || '';
-    const parts = rawMeaning.Split ? rawMeaning.Split(';') : rawMeaning.split(';');
-    const cleanParts = parts.map(p => p.replace(/^\d+[\.\:\s]*/, '').trim()).filter(Boolean);
-
-    if (cleanParts.length > 0) {
-      cleanParts.forEach(m => addMeaningInputRow(m));
-    } else {
-      addMeaningInputRow('');
-    }
-  } else {
-    modalTitle.innerText = 'Thêm Từ Vựng Mới';
-    txtWord.value = '';
-    txtWord.disabled = false;
-    txtPinyin.value = '';
-    txtHanViet.value = '';
-    txtCount.value = 1;
-    addMeaningInputRow('');
-  }
-
-  document.getElementById('wordModalOverlay').classList.add('active');
-  if (!wordToEdit) txtWord.focus();
-}
-
-function closeWordModal() {
-  document.getElementById('wordModalOverlay').classList.remove('active');
-  vocabState.editingWord = null;
-}
-
-function addMeaningInputRow(val = '') {
-  const container = document.getElementById('meaningsContainer');
-  const rowId = 'meaning_row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-  
-  const div = document.createElement('div');
-  div.className = 'meaning-row';
-  div.id = rowId;
-  div.innerHTML = `
-    <input type="text" class="form-input meaning-input-field" value="${escapeHtml(val)}" placeholder="Nhập nghĩa của từ..." />
-    <button class="btn btn-icon" style="color: var(--accent-danger); flex-shrink: 0;" onclick="removeMeaningRow('${rowId}')">🗑️</button>
-  `;
-  container.appendChild(div);
-}
-
-function removeMeaningRow(rowId) {
-  const row = document.getElementById(rowId);
-  if (row) row.remove();
-}
-
-function saveWordFromModal() {
-  const txtWord = document.getElementById('txtWord').value.trim();
-  const txtPinyin = document.getElementById('txtPinyin').value.trim();
-  const txtHanViet = document.getElementById('txtHanViet').value.trim();
-  const countVal = parseInt(document.getElementById('txtCount').value) || 1;
-
-  if (!txtWord) {
-    alert("Vui lòng nhập Từ chữ Hán!");
-    return;
-  }
-
-  // Gather meaning fields
-  const meaningInputs = document.querySelectorAll('.meaning-input-field');
-  const meanings = [];
-  meaningInputs.forEach(input => {
-    const val = input.value.trim().replace(/^\d+[\.\:\s]*/, '');
-    if (val) meanings.push(val);
-  });
-
-  let finalMeaning = '';
-  if (meanings.length === 1) {
-    finalMeaning = meanings[0];
-  } else if (meanings.length > 1) {
-    finalMeaning = meanings.map((m, idx) => `${idx + 1}. ${m}`).join('; ');
-  }
-
-  const now = new Date().toISOString();
-  const existing = vocabState.vocabulary[txtWord];
-
-  vocabState.vocabulary[txtWord] = {
-    count: countVal,
-    first_seen: existing && existing.first_seen ? existing.first_seen : now,
-    last_seen: now,
-    pinyin: txtPinyin,
-    han_viet: txtHanViet,
-    meaning: finalMeaning
-  };
-
-  saveDataToLocalStorage();
-  closeWordModal();
-  renderDirectoryView();
-}
-
-function deleteWord(word) {
-  if (confirm(`Bạn có chắc chắn muốn xóa từ '${word}' khỏi kho từ vựng?`)) {
-    delete vocabState.vocabulary[word];
-    saveDataToLocalStorage();
-    renderDirectoryView();
-  }
-}
-
-// --- FLASHCARDS VIEW ---
-function initFlashcardView() {
-  const keys = Object.keys(vocabState.vocabulary);
-  if (keys.length === 0) {
-    document.getElementById('tab-flashcards').innerHTML = `
-      <div style="text-align: center; padding: 4rem;">Chưa có từ vựng nào để học Flashcards.</div>
-    `;
-    return;
-  }
-
-  vocabState.flashcardList = keys.map(k => ({ word: k, ...vocabState.vocabulary[k] }));
-  vocabState.flashcardIndex = 0;
-  vocabState.flashcardFlipped = false;
-
-  renderFlashcard();
-}
-
-function renderFlashcard() {
-  const list = vocabState.flashcardList;
-  if (list.length === 0) return;
-
-  const item = list[vocabState.flashcardIndex];
-  const card = document.getElementById('flashcardElement');
-
-  if (card) {
-    card.classList.toggle('flipped', vocabState.flashcardFlipped);
-    
-    document.getElementById('flashcardHanzi').innerText = item.word;
-    document.getElementById('flashcardPinyin').innerText = item.pinyin || '';
-    document.getElementById('flashcardHanViet').innerText = item.han_viet ? `[${item.han_viet}]` : '';
-    document.getElementById('flashcardMeaning').innerHTML = formatMeaningText(item.meaning);
-    document.getElementById('flashcardProgress').innerText = `${vocabState.flashcardIndex + 1} / ${list.length}`;
-  }
-}
-
-function toggleFlashcardFlip() {
-  vocabState.flashcardFlipped = !vocabState.flashcardFlipped;
-  renderFlashcard();
-}
-
-function nextFlashcard() {
-  vocabState.flashcardFlipped = false;
-  vocabState.flashcardIndex = (vocabState.flashcardIndex + 1) % vocabState.flashcardList.length;
-  renderFlashcard();
-}
-
-function prevFlashcard() {
-  vocabState.flashcardFlipped = false;
-  vocabState.flashcardIndex = (vocabState.flashcardIndex - 1 + vocabState.flashcardList.length) % vocabState.flashcardList.length;
-  renderFlashcard();
-}
-
-function shuffleFlashcards() {
+  // Shuffle flashcards for effective learning
   vocabState.flashcardList.sort(() => Math.random() - 0.5);
   vocabState.flashcardIndex = 0;
   vocabState.flashcardFlipped = false;
-  renderFlashcard();
+
+  renderCurrentFlashcard();
 }
 
-function speakCurrentFlashcard(e) {
-  e.stopPropagation();
-  const item = vocabState.flashcardList[vocabState.flashcardIndex];
-  if (item) speakWord(item.word);
-}
+function renderCurrentFlashcard() {
+  const card = document.getElementById('swipeFlashcard');
+  const indexText = document.getElementById('flashcardIndexText');
+  const progressBar = document.getElementById('flashcardProgressBar');
 
-// --- QUIZ VIEW ---
-function initQuizView() {
-  const keys = Object.keys(vocabState.vocabulary);
-  if (keys.length < 4) {
-    document.getElementById('tab-quiz').innerHTML = `
-      <div style="text-align: center; padding: 4rem; color: var(--text-muted);">
-        <h3>Cần ít nhất 4 từ vựng để bắt đầu Trắc nghiệm</h3>
-        <p style="margin-top: 0.5rem;">Hãy thêm từ mới hoặc tải từ vựng mẫu vào kho.</p>
-      </div>
-    `;
+  if (!card) return;
+
+  const total = vocabState.flashcardList.length;
+  if (total === 0) {
+    indexText.textContent = "0 / 0";
+    progressBar.style.width = "0%";
     return;
   }
 
-  generateNextQuizQuestion();
+  const current = vocabState.flashcardList[vocabState.flashcardIndex];
+
+  indexText.textContent = `${vocabState.flashcardIndex + 1} / ${total}`;
+  progressBar.style.width = `${((vocabState.flashcardIndex + 1) / total) * 100}%`;
+
+  // Reset Card Transform & Flip
+  card.classList.remove('flipped');
+  card.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+  card.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+  vocabState.flashcardFlipped = false;
+
+  // Set Content
+  document.getElementById('fcHanzi').textContent = current.hanzi;
+  document.getElementById('fcCountBadge').textContent = `Gặp ${current.count || 1} lần`;
+  document.getElementById('fcPinyin').textContent = current.pinyin || '';
+  document.getElementById('fcHanViet').textContent = current.han_viet ? `Hán Việt: ${current.han_viet}` : '';
+  document.getElementById('fcMeaning').textContent = current.meaning || '';
+
+  // Reset Stamps
+  document.querySelector('.stamp-pass').style.opacity = '0';
+  document.querySelector('.stamp-review').style.opacity = '0';
 }
 
-function generateNextQuizQuestion() {
-  const keys = Object.keys(vocabState.vocabulary);
-  const targetKey = keys[Math.floor(Math.random() * keys.length)];
-  const targetInfo = vocabState.vocabulary[targetKey];
+function flipFlashcard() {
+  const card = document.getElementById('swipeFlashcard');
+  if (!card) return;
+  vocabState.flashcardFlipped = !vocabState.flashcardFlipped;
+  card.classList.toggle('flipped', vocabState.flashcardFlipped);
+}
 
-  // Pick 3 wrong options
-  const wrongOptions = keys.filter(k => k !== targetKey).sort(() => Math.random() - 0.5).slice(0, 3);
-  const allOptions = [targetKey, ...wrongOptions].sort(() => Math.random() - 0.5);
+function passFlashcard(isPass) {
+  const card = document.getElementById('swipeFlashcard');
+  if (!card) return;
 
-  vocabState.quizCurrentQuestion = {
-    targetKey,
-    targetInfo,
-    allOptions
+  const targetX = isPass ? 400 : -400;
+  const rotation = isPass ? 25 : -25;
+
+  card.style.transition = 'transform 0.35s ease-out, opacity 0.35s ease-out';
+  card.style.transform = `translate3d(${targetX}px, 0, 0) rotate(${rotation}deg)`;
+  card.style.opacity = '0';
+
+  setTimeout(() => {
+    card.style.opacity = '1';
+    vocabState.flashcardIndex = (vocabState.flashcardIndex + 1) % vocabState.flashcardList.length;
+    renderCurrentFlashcard();
+  }, 350);
+}
+
+/* TOUCH DRAG SWIPE ENGINE */
+function initTouchSwipe() {
+  const card = document.getElementById('swipeFlashcard');
+  const stage = document.querySelector('.flashcard-stage');
+  if (!card || !stage) return;
+
+  const passStamp = document.querySelector('.stamp-pass');
+  const reviewStamp = document.querySelector('.stamp-review');
+
+  const onStart = (e) => {
+    vocabState.isDragging = true;
+    const touch = e.touches ? e.touches[0] : e;
+    vocabState.startX = touch.clientX;
+    vocabState.startY = touch.clientY;
+    card.style.transition = 'none';
   };
-  vocabState.quizAnswered = false;
-  vocabState.selectedAnswer = null;
 
-  renderQuiz();
-}
+  const onMove = (e) => {
+    if (!vocabState.isDragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    vocabState.currentX = touch.clientX - vocabState.startX;
+    vocabState.currentY = touch.clientY - vocabState.startY;
 
-function renderQuiz() {
-  const q = vocabState.quizCurrentQuestion;
-  if (!q) return;
+    const rotation = vocabState.currentX / 15;
+    card.style.transform = `translate3d(${vocabState.currentX}px, ${vocabState.currentY * 0.3}px, 0) rotate(${rotation}deg)`;
 
-  document.getElementById('quizWordText').innerText = q.targetKey;
-  document.getElementById('quizPinyinText').innerText = q.targetInfo.pinyin || '';
-  document.getElementById('quizScoreText').innerText = `Điểm: ${vocabState.quizScore}`;
-  document.getElementById('quizStreakText').innerText = `Chuỗi: ${vocabState.quizStreak} 🔥`;
+    // Opacity stamps logic
+    const passRatio = Math.min(Math.max(vocabState.currentX / 100, 0), 1);
+    const reviewRatio = Math.min(Math.max(-vocabState.currentX / 100, 0), 1);
 
-  const container = document.getElementById('quizOptionsContainer');
-  container.innerHTML = q.allOptions.map((optKey, idx) => {
-    const info = vocabState.vocabulary[optKey];
-    let btnClass = 'quiz-option-btn';
+    if (passStamp) passStamp.style.opacity = passRatio.toString();
+    if (reviewStamp) reviewStamp.style.opacity = reviewRatio.toString();
+  };
 
-    if (vocabState.quizAnswered) {
-      if (optKey === q.targetKey) btnClass += ' correct';
-      else if (optKey === vocabState.selectedAnswer) btnClass += ' wrong';
+  const onEnd = () => {
+    if (!vocabState.isDragging) return;
+    vocabState.isDragging = false;
+
+    if (passStamp) passStamp.style.opacity = '0';
+    if (reviewStamp) reviewStamp.style.opacity = '0';
+
+    if (vocabState.currentX > 100) {
+      passFlashcard(true); // Swipe Right Pass
+    } else if (vocabState.currentX < -100) {
+      passFlashcard(false); // Swipe Left Review
+    } else if (Math.abs(vocabState.currentX) < 10 && Math.abs(vocabState.currentY) < 10) {
+      flipFlashcard(); // Tap Flip
+    } else {
+      // Snap back
+      card.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+      card.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
     }
 
-    return `
-      <button class="${btnClass}" onclick="handleQuizAnswer('${escapeJsStr(optKey)}')">
-        <span style="color: var(--accent-primary); font-weight: bold; margin-right: 0.5rem;">${String.fromCharCode(65 + idx)}.</span>
-        ${escapeHtml(info.meaning || info.han_viet || optKey)}
-      </button>
-    `;
-  }).join('');
+    vocabState.currentX = 0;
+    vocabState.currentY = 0;
+  };
+
+  // Touch Events for Mobile/iOS
+  stage.addEventListener('touchstart', onStart, { passive: true });
+  stage.addEventListener('touchmove', onMove, { passive: true });
+  stage.addEventListener('touchend', onEnd);
+
+  // Mouse Events for Desktop Testing
+  stage.addEventListener('mousedown', onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onEnd);
 }
 
-function handleQuizAnswer(selectedKey) {
+/* ==========================================================================
+   VIEW 3: TRẮC NGHIỆM (QUIZ ENGINE)
+   ========================================================================== */
+function generateQuizQuestion() {
+  const keys = Object.keys(vocabState.vocabulary);
+  if (keys.length < 2) {
+    alert('Cần ít nhất 2 từ vựng để bắt đầu Trắc nghiệm!');
+    return;
+  }
+
+  vocabState.quizAnswered = false;
+  document.getElementById('nextQuizBtn').style.display = 'none';
+
+  // Pick target word
+  const correctKey = keys[Math.floor(Math.random() * keys.length)];
+  const correctItem = { hanzi: correctKey, ...vocabState.vocabulary[correctKey] };
+
+  // Pick 3 distractors
+  const distractors = [];
+  while (distractors.length < Math.min(3, keys.length - 1)) {
+    const rKey = keys[Math.floor(Math.random() * keys.length)];
+    if (rKey !== correctKey && !distractors.includes(rKey)) {
+      distractors.push(rKey);
+    }
+  }
+
+  // Build Options List
+  const options = [correctItem, ...distractors.map(k => ({ hanzi: k, ...vocabState.vocabulary[k] }))];
+  options.sort(() => Math.random() - 0.5);
+
+  vocabState.quizCurrentQuestion = {
+    correctHanzi: correctKey,
+    correctMeaning: correctItem.meaning,
+    hanzi: correctItem.hanzi,
+    pinyin: correctItem.pinyin,
+    options
+  };
+
+  // Render Question
+  document.getElementById('quizQuestionHanzi').textContent = correctItem.hanzi;
+  document.getElementById('quizQuestionPinyin').textContent = correctItem.pinyin || '';
+
+  const optionsContainer = document.getElementById('quizOptionsContainer');
+  optionsContainer.innerHTML = options.map(opt => `
+    <button class="quiz-option-btn" onclick="handleQuizAnswer('${escapeHtml(opt.hanzi)}')">
+      ${escapeHtml(opt.meaning || opt.pinyin || opt.hanzi)}
+    </button>
+  `).join('');
+}
+
+function handleQuizAnswer(selectedHanzi) {
   if (vocabState.quizAnswered) return;
-
   vocabState.quizAnswered = true;
-  vocabState.selectedAnswer = selectedKey;
-  vocabState.quizTotal++;
 
-  if (selectedKey === vocabState.quizCurrentQuestion.targetKey) {
+  const q = vocabState.quizCurrentQuestion;
+  const isCorrect = selectedHanzi === q.correctHanzi;
+
+  vocabState.quizTotal++;
+  if (isCorrect) {
     vocabState.quizScore += 10;
     vocabState.quizStreak++;
-    speakWord(vocabState.quizCurrentQuestion.targetKey);
   } else {
     vocabState.quizStreak = 0;
   }
 
-  renderQuiz();
+  // Update Score Board
+  document.getElementById('quizScoreText').textContent = vocabState.quizScore;
+  document.getElementById('quizStreakText').textContent = vocabState.quizStreak;
+  document.getElementById('quizTotalText').textContent = vocabState.quizTotal;
 
-  setTimeout(() => {
-    generateNextQuizQuestion();
-  }, 1600);
-}
-
-// --- STATS VIEW ---
-function renderStatsView() {
-  const keys = Object.keys(vocabState.vocabulary);
-  const totalWords = keys.length;
-  let totalCount = 0;
-  
-  keys.forEach(k => {
-    totalCount += (vocabState.vocabulary[k].count || 1);
+  // Highlight Options
+  const optionBtns = document.querySelectorAll('.quiz-option-btn');
+  optionBtns.forEach(btn => {
+    const btnText = btn.textContent.trim();
+    if (q.options.find(o => o.hanzi === q.correctHanzi && (o.meaning === btnText || o.pinyin === btnText || o.hanzi === btnText))) {
+      btn.classList.add('correct');
+    } else if (q.options.find(o => o.hanzi === selectedHanzi && (o.meaning === btnText || o.pinyin === btnText || o.hanzi === btnText))) {
+      btn.classList.add('wrong');
+    }
   });
 
-  const avgFreq = totalWords ? (totalCount / totalWords).toFixed(1) : 0;
+  document.getElementById('nextQuizBtn').style.display = 'inline-flex';
+}
 
-  document.getElementById('statTotalWords').innerText = totalWords;
-  document.getElementById('statTotalCount').innerText = totalCount;
-  document.getElementById('statAvgFreq').innerText = avgFreq;
+/* ==========================================================================
+   VIEW 4: THỐNG KÊ (STATS)
+   ========================================================================== */
+function renderStats() {
+  const entries = Object.entries(vocabState.vocabulary);
+  const totalWords = entries.length;
 
-  // Render Top 10 chart
-  const top10 = keys.map(k => ({ word: k, count: vocabState.vocabulary[k].count || 1 }))
-                    .sort((a, b) => b.count - a.count)
-                    .slice(0, 10);
+  let totalEncountered = 0;
+  entries.forEach(([_, val]) => {
+    totalEncountered += (val.count || 1);
+  });
 
-  const chartContainer = document.getElementById('top10Chart');
-  const maxCount = top10[0] ? top10[0].count : 1;
+  const avgCount = totalWords > 0 ? (totalEncountered / totalWords).toFixed(1) : 0;
+  const masteredCount = entries.filter(([_, val]) => (val.count || 1) >= 5).length;
+  const masteryRate = totalWords > 0 ? Math.round((masteredCount / totalWords) * 100) : 0;
 
-  chartContainer.innerHTML = top10.map(item => `
-    <div style="margin-bottom: 0.85rem;">
-      <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.25rem;">
-        <span style="font-weight: 700; font-size: 1.1rem;">${escapeHtml(item.word)}</span>
-        <span style="color: var(--accent-primary); font-weight: bold;">${item.count} lần</span>
+  document.getElementById('statTotalWords').textContent = totalWords;
+  document.getElementById('statTotalEncountered').textContent = totalEncountered;
+  document.getElementById('statAvgCount').textContent = avgCount;
+  document.getElementById('statMasteryRate').textContent = `${masteryRate}%`;
+
+  // Top 5 words
+  const sorted = [...entries].sort((a, b) => (b[1].count || 0) - (a[1].count || 0)).slice(0, 5);
+
+  const topListEl = document.getElementById('topWordsList');
+  if (topListEl) {
+    topListEl.innerHTML = sorted.map(([hanzi, val]) => `
+      <div class="top-word-item">
+        <div>
+          <strong style="color: var(--accent-primary); font-size: 1.1rem;">${escapeHtml(hanzi)}</strong>
+          <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 8px;">(${escapeHtml(val.pinyin || '')})</span>
+        </div>
+        <span class="vocab-count-tag">${val.count || 1} lần</span>
       </div>
-      <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
-        <div style="width: ${(item.count / maxCount) * 100}%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); height: 100%; border-radius: 5px; transition: width 0.5s ease;"></div>
-      </div>
-    </div>
-  `).join('');
+    `).join('');
+  }
 }
 
-// --- FILE IMPORT & EXPORT ---
-function handleFileSelect(e) {
-  const file = e.target.files[0];
-  if (file) processJsonFile(file);
+/* ==========================================================================
+   CHINESE TEXT-TO-SPEECH (SPEECH SYNTHESIS)
+   ========================================================================== */
+function speakChinese(text) {
+  if (!('speechSynthesis' in window)) {
+    console.warn('SpeechSynthesis is not supported on this browser.');
+    return;
+  }
+
+  window.speechSynthesis.cancel(); // Stop ongoing speech
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'zh-CN';
+  utterance.rate = 0.85; // Natural pace
+
+  // Try finding a native Chinese voice
+  const voices = window.speechSynthesis.getVoices();
+  const zhVoice = voices.find(v => v.lang.includes('zh') || v.lang.includes('CN') || v.name.includes('Chinese'));
+  if (zhVoice) utterance.voice = zhVoice;
+
+  window.speechSynthesis.speak(utterance);
 }
 
-function processJsonFile(file) {
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    try {
-      const parsed = JSON.parse(event.target.result);
-      if (parsed && (parsed.vocabulary || parsed.version)) {
-        vocabState.vocabulary = parsed.vocabulary || {};
-        vocabState.version = parsed.version || 1;
-        vocabState.sourceFileName = file.name;
-        saveDataToLocalStorage();
-        renderApp();
-        alert(`Đã tải thành công file '${file.name}' với ${Object.keys(vocabState.vocabulary).length} từ vựng!`);
-      } else {
-        alert("Cấu trúc file JSON không đúng định dạng từ vựng chuẩn (thiếu thuộc tính 'vocabulary').");
-      }
-    } catch (err) {
-      alert("Lỗi khi đọc file JSON: " + err.message);
-    }
-  };
-  reader.readAsText(file, 'UTF-8');
+/* ==========================================================================
+   MODAL & CRUD ACTIONS
+   ========================================================================== */
+function openWordModal(wordKey = null) {
+  vocabState.editingWord = wordKey;
+  const modal = document.getElementById('wordModal');
+  const title = document.getElementById('modalTitle');
+
+  if (wordKey && vocabState.vocabulary[wordKey]) {
+    const data = vocabState.vocabulary[wordKey];
+    title.textContent = `Chỉnh Sửa Từ: ${wordKey}`;
+    document.getElementById('inputWord').value = wordKey;
+    document.getElementById('inputWord').disabled = true; // Key cannot be edited
+    document.getElementById('inputPinyin').value = data.pinyin || '';
+    document.getElementById('inputHanViet').value = data.han_viet || '';
+    document.getElementById('inputMeaning').value = data.meaning || '';
+    document.getElementById('inputCount').value = data.count || 1;
+  } else {
+    title.textContent = 'Thêm Từ Vựng Mới';
+    document.getElementById('inputWord').value = '';
+    document.getElementById('inputWord').disabled = false;
+    document.getElementById('inputPinyin').value = '';
+    document.getElementById('inputHanViet').value = '';
+    document.getElementById('inputMeaning').value = '';
+    document.getElementById('inputCount').value = 1;
+  }
+
+  modal.classList.add('active');
 }
 
-function loadSampleData() {
-  if (confirm("Bạn có muốn nạp dữ liệu từ vựng mẫu để dùng thử ứng dụng không?")) {
-    vocabState.vocabulary = { ...SAMPLE_VOCABULARY.vocabulary };
-    vocabState.sourceFileName = 'Từ vựng Mẫu';
-    saveDataToLocalStorage();
+function closeWordModal() {
+  document.getElementById('wordModal').classList.remove('active');
+  vocabState.editingWord = null;
+}
+
+function handleWordFormSubmit(e) {
+  e.preventDefault();
+
+  const word = document.getElementById('inputWord').value.trim();
+  const pinyin = document.getElementById('inputPinyin').value.trim();
+  const hanViet = document.getElementById('inputHanViet').value.trim();
+  const meaning = document.getElementById('inputMeaning').value.trim();
+  const count = parseInt(document.getElementById('inputCount').value, 10) || 1;
+
+  if (!word || !pinyin || !meaning) {
+    alert('Vui lòng điền đầy đủ Từ gốc, Pinyin và Nghĩa!');
+    return;
+  }
+
+  const now = new Date().toISOString();
+
+  if (vocabState.editingWord) {
+    // Edit existing word
+    vocabState.vocabulary[vocabState.editingWord] = {
+      ...vocabState.vocabulary[vocabState.editingWord],
+      pinyin,
+      han_viet: hanViet,
+      meaning,
+      count,
+      last_seen: now
+    };
+  } else {
+    // Add new word
+    vocabState.vocabulary[word] = {
+      count,
+      first_seen: now,
+      last_seen: now,
+      pinyin,
+      han_viet: hanViet,
+      meaning
+    };
+  }
+
+  saveData();
+  closeWordModal();
+  renderApp();
+}
+
+function editWord(wordKey) {
+  openWordModal(wordKey);
+}
+
+function deleteWord(wordKey) {
+  if (confirm(`Bạn có chắc muốn xóa từ "${wordKey}"?`)) {
+    delete vocabState.vocabulary[wordKey];
+    saveData();
     renderApp();
   }
 }
 
-function exportJsonFile() {
-  const obj = {
+/* ==========================================================================
+   FILE IMPORT & EXPORT
+   ========================================================================== */
+function handleFileImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      if (data && (data.vocabulary || typeof data === 'object')) {
+        const newVocab = data.vocabulary || data;
+        vocabState.vocabulary = { ...vocabState.vocabulary, ...newVocab };
+        vocabState.sourceFileName = file.name.replace('.json', '');
+        saveData();
+        renderApp();
+        alert(`Đã nhập thành công từ file: ${file.name}`);
+      } else {
+        alert('File JSON không đúng định dạng từ vựng!');
+      }
+    } catch (err) {
+      alert('Không thể đọc file JSON này. Vui lòng kiểm tra lại!');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function exportDataJson() {
+  const payload = {
     version: vocabState.version,
     vocabulary: vocabState.vocabulary
   };
-  const jsonStr = JSON.stringify(obj, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = vocabState.sourceFileName.endsWith('.json') ? vocabState.sourceFileName : `${vocabState.sourceFileName}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportCsvFile() {
-  const rows = getFilteredAndSortedRows();
-  let csv = '\uFEFFTừ,Pinyin,Hán Việt,Nghĩa,Số lần gặp,Ngày đọc đầu tiên,Lần gặp gần nhất\n';
-
-  rows.forEach(r => {
-    csv += `"${r.word}","${r.pinyin}","${r.han_viet}","${r.meaning.replace(/"/g, '""')}","${r.count}","${r.first_seen}","${r.last_seen}"\n`;
-  });
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `TuVung_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `vocabulary-counter_${new Date().toISOString().slice(0, 10)}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
 }
 
 // Utility Helpers
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function escapeJsStr(str) {
-  if (!str) return '';
-  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
