@@ -433,7 +433,7 @@ async function createNewFile() {
 
   let fileName = defaultName;
 
-  // 1. Native Save File Picker API (Opens OS File Explorer / Directory Selector)
+  // 1. Native Save File Picker API (Opens OS File Explorer / Directory Selector on PC)
   if ('showSaveFilePicker' in window) {
     try {
       const handle = await window.showSaveFilePicker({
@@ -469,7 +469,7 @@ async function createNewFile() {
       saveData();
 
       renderApp();
-      alert(`Đã tạo và chọn đường dẫn lưu file thành công tại: "${fileName}"! Bất kỳ chỉnh sửa nào cũng sẽ được tự động ghi đè trực tiếp vào file này.`);
+      alert(`Đã tạo và chọn đường dẫn lưu file thành công tại: "${fileName}"!`);
       return;
     } catch (err) {
       if (err.name === 'AbortError') return; // User cancelled save dialog
@@ -477,7 +477,7 @@ async function createNewFile() {
     }
   }
 
-  // 2. Mobile / iOS Safari Fallback: Switch active dataset immediately in app
+  // 2. Mobile / iOS Safari: Switch active dataset immediately in app & trigger native "Lưu vào Tệp" sheet
   saveData();
 
   vocabState.activeFileHandle = null;
@@ -485,9 +485,31 @@ async function createNewFile() {
   vocabState.vocabulary = {};
   vocabState.studyLogs = {};
   saveData();
-
   renderApp();
-  alert(`Đã tạo và mở file từ vựng mới "${fileName}"! Bạn có thể bắt đầu gõ thêm từ ngay.`);
+
+  // Trigger iOS Native Web Share Sheet -> User selects "Lưu vào Tệp" (Save to Files)!
+  const initialPayload = {
+    version: vocabState.version,
+    sourceFileName: fileName,
+    vocabulary: {},
+    studyLogs: {}
+  };
+
+  const blob = new Blob([JSON.stringify(initialPayload, null, 2)], { type: 'application/json' });
+  const file = new File([blob], fileName, { type: 'application/json' });
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: fileName,
+        text: `Tệp từ vựng mới: ${fileName}`
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.warn('iOS Web Share error:', err);
+    }
+  }
 }
 
 async function openFileWithPicker() {
@@ -1146,6 +1168,12 @@ function removeMeaningRow(rowId) {
 }
 
 function openWordModal(wordKey = null) {
+  // Prevent adding words if no file dataset is active
+  if (!wordKey && (vocabState.sourceFileName === 'Danh sách trống' || !vocabState.sourceFileName)) {
+    alert('⚠️ Bạn chưa chọn file từ vựng!\nVui lòng bấm "📂 Mở file" hoặc "➕ Tạo file" trước khi thêm từ vựng mới.');
+    return;
+  }
+
   vocabState.editingWord = wordKey;
   const modal = document.getElementById('wordModal');
   const title = document.getElementById('modalTitle');
