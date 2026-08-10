@@ -209,38 +209,15 @@ function clearAllStorage() {
   }
 }
 
-async function saveData() {
-  if (!vocabState.allFiles) vocabState.allFiles = {};
-
-  // Auto-persist changes into active file dataset!
-  vocabState.allFiles[vocabState.sourceFileName] = {
-    vocabulary: vocabState.vocabulary,
-    studyLogs: vocabState.studyLogs || {},
-    lastModified: new Date().toISOString()
-  };
-
+function saveData() {
   const payload = {
     version: vocabState.version,
-    sourceFileName: vocabState.sourceFileName,
-    allFiles: vocabState.allFiles,
+    sourceFileName: vocabState.sourceFileName || 'Từ vựng của tôi',
     vocabulary: vocabState.vocabulary,
     studyLogs: vocabState.studyLogs || {}
   };
   localStorage.setItem('ios_vocab_data', JSON.stringify(payload));
   updateStatsHeader();
-  showSaveIndicator();
-
-  // REAL-TIME DIRECT DISK AUTO-SAVE TO THE JSON FILE ON YOUR COMPUTER!
-  if (vocabState.activeFileHandle) {
-    try {
-      const writable = await vocabState.activeFileHandle.createWritable();
-      await writable.write(JSON.stringify(payload, null, 2));
-      await writable.close();
-      console.log(`[Auto-Save] Successfully saved changes directly into file "${vocabState.sourceFileName}" on your disk!`);
-    } catch (err) {
-      console.warn('[Auto-Save] Direct disk file write error:', err);
-    }
-  }
 }
 
 function showSaveIndicator() {
@@ -388,23 +365,10 @@ function bindEvents() {
   // Form Submit
   document.getElementById('wordForm')?.addEventListener('submit', handleWordFormSubmit);
 
-  // Save File Button
-  document.getElementById('saveCurrentFileBtn')?.addEventListener('click', manualSaveFile);
-
-  // Open File / Create / Close File Buttons & Modal
-  document.getElementById('openFilePickerBtn')?.addEventListener('click', openFileWithPicker);
-  document.getElementById('createNewFileBtn')?.addEventListener('click', openCreateFileModal);
-  document.getElementById('settingsCreateNewFileBtn')?.addEventListener('click', openCreateFileModal);
-  document.getElementById('closeCreateFileModalBtn')?.addEventListener('click', closeCreateFileModal);
-  document.getElementById('cancelCreateFileModalBtn')?.addEventListener('click', closeCreateFileModal);
-  document.getElementById('createFileForm')?.addEventListener('submit', handleCreateFileSubmit);
-  document.getElementById('closeCurrentFileBtn')?.addEventListener('click', closeCurrentFile);
-  document.getElementById('settingsCloseCurrentFileBtn')?.addEventListener('click', closeCurrentFile);
-
   // Clear Storage Reset Button
   document.getElementById('clearAllStorageBtn')?.addEventListener('click', clearAllStorage);
 
-  // File Import / Export
+  // File Import / Export ONLY
   document.getElementById('importJsonFile')?.addEventListener('change', handleFileImport);
   document.getElementById('settingsImportJsonFile')?.addEventListener('change', handleFileImport);
   document.getElementById('exportJsonBtn')?.addEventListener('click', exportDataJson);
@@ -442,333 +406,80 @@ function bindEvents() {
 }
 
 /* ==========================================================================
-   MULTI-FILE MANAGEMENT & JSON PERSISTENCE
+   JSON IMPORT & EXPORT ENGINE (CLEAN & RELIABLE)
    ========================================================================== */
-async function manualSaveFile() {
-  if (vocabState.sourceFileName === 'Danh sách trống' || !vocabState.sourceFileName) {
-    alert('⚠️ Chưa có file từ vựng nào được mở!\nVui lòng Mở file hoặc Tạo file trước khi bấm lưu.');
-    return;
-  }
-
-  saveData();
-
-  if (vocabState.activeFileHandle) {
-    await flushDiskSave();
-    alert(`Đã lưu trực tiếp tiến trình từ vựng vào file "${vocabState.sourceFileName}" trên máy tính thành công!`);
-    return;
-  }
-
-  // On iOS / Mobile: Trigger Web Share Sheet so user can tap "Lưu vào Tệp" to update file in iPhone Files app!
-  const payload = {
-    version: vocabState.version,
-    sourceFileName: vocabState.sourceFileName,
-    vocabulary: vocabState.vocabulary,
-    studyLogs: vocabState.studyLogs || {}
-  };
-
-  const fileName = vocabState.sourceFileName.endsWith('.json') ? vocabState.sourceFileName : `${vocabState.sourceFileName}.json`;
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const file = new File([blob], fileName, { type: 'application/json' });
-
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: fileName,
-        text: `Lưu tệp từ vựng: ${fileName}`
-      });
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('iOS Share error:', err);
-    }
-  } else {
-    alert(`✅ Đã lưu thành công toàn bộ từ vựng & tiến trình mới nhất vào file "${vocabState.sourceFileName}"!`);
-  }
-}
-function openCreateFileModal() {
-  const modal = document.getElementById('createFileModal');
-  const input = document.getElementById('newFileNameInput');
-  if (input) input.value = '';
-  if (modal) modal.classList.add('active');
-}
-
-function closeCreateFileModal() {
-  const modal = document.getElementById('createFileModal');
-  if (modal) modal.classList.remove('active');
-}
-
-async function handleCreateFileSubmit(e) {
-  e.preventDefault();
-
-  let inputName = document.getElementById('newFileNameInput').value.trim();
-  if (!inputName) return;
-  if (!inputName.endsWith('.json')) inputName += '.json';
-
-  closeCreateFileModal();
-
-  const fileName = inputName;
-
-  // 1. Native Save File Picker API (Opens OS File Explorer / Directory Selector on PC)
-  if ('showSaveFilePicker' in window) {
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: fileName,
-        types: [{
-          description: 'Tệp Từ Vựng JSON',
-          accept: { 'application/json': ['.json'] }
-        }]
-      });
-
-      saveData();
-
-      const initialPayload = {
-        version: vocabState.version,
-        sourceFileName: handle.name,
-        vocabulary: {},
-        studyLogs: {}
-      };
-
-      const writable = await handle.createWritable();
-      await writable.write(JSON.stringify(initialPayload, null, 2));
-      await writable.close();
-
-      vocabState.activeFileHandle = handle;
-      vocabState.sourceFileName = handle.name;
-      vocabState.vocabulary = {};
-      vocabState.studyLogs = {};
-      saveData();
-
-      renderApp();
-      alert(`Đã tạo và chọn đường dẫn lưu file thành công tại: "${handle.name}"!`);
-      return;
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('Native file picker fallback:', err);
-    }
-  }
-
-  // 2. Mobile / iOS Safari: Save dataset in memory & trigger native "Lưu vào Tệp" Share Sheet
-  saveData();
-
-  vocabState.activeFileHandle = null;
-  vocabState.sourceFileName = fileName;
-  vocabState.vocabulary = {};
-  vocabState.studyLogs = {};
-  
-  if (!vocabState.allFiles) vocabState.allFiles = {};
-  vocabState.allFiles[fileName] = {
-    vocabulary: {},
-    studyLogs: {},
-    lastModified: new Date().toISOString()
-  };
-
-  saveData();
-  renderApp();
-
-  // Trigger iOS Native Web Share Sheet -> User selects "Lưu vào Tệp" (Save to Files)!
-  const initialPayload = {
-    version: vocabState.version,
-    sourceFileName: fileName,
-    vocabulary: {},
-    studyLogs: {}
-  };
-
-  const blob = new Blob([JSON.stringify(initialPayload, null, 2)], { type: 'application/json' });
-  const file = new File([blob], fileName, { type: 'application/json' });
-
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: fileName,
-        text: `Tệp từ vựng mới: ${fileName}`
-      });
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('iOS Web Share error:', err);
-    }
-  }
-}
-
-function triggerDirectFileDownload(fileName, dataContent) {
-  // Only works on Desktop browsers (Chrome/Edge), NOT on iOS Safari
-  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    // On iOS: use Web Share API to let user choose "Lưu vào Tệp"
-    const jsonString = typeof dataContent === 'string' ? dataContent : JSON.stringify(dataContent, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const safeName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
-    const file = new File([blob], safeName, { type: 'application/json' });
-    
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: safeName }).catch(() => {});
-    }
-    return;
-  }
-
-  // Desktop: standard blob download
-  const jsonString = typeof dataContent === 'string' ? dataContent : JSON.stringify(dataContent, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function exportDataJson() {
-  const payload = {
-    version: vocabState.version,
-    sourceFileName: vocabState.sourceFileName,
-    vocabulary: vocabState.vocabulary,
-    studyLogs: vocabState.studyLogs || {}
-  };
-
-  triggerDirectFileDownload(vocabState.sourceFileName, payload);
-}
-
-async function openFileWithPicker() {
-  if ('showOpenFilePicker' in window) {
-    try {
-      const [handle] = await window.showOpenFilePicker({
-        types: [{
-          description: 'Tệp Từ Vựng JSON',
-          accept: { 'application/json': ['.json'] }
-        }],
-        multiple: false
-      });
-
-      const file = await handle.getFile();
-      const content = await file.text();
-      const data = JSON.parse(content);
-
-      // Store handle for direct real-time disk auto-saving!
-      vocabState.activeFileHandle = handle;
-      vocabState.sourceFileName = handle.name;
-      vocabState.vocabulary = data.vocabulary || data;
-      vocabState.studyLogs = data.studyLogs || {};
-
-      saveData();
-      renderApp();
-      alert(`Đã mở file "${handle.name}". Bất kỳ chỉnh sửa nào từ bây giờ cũng sẽ được TỰ ĐỘNG LƯU TRỰC TIẾP vào file JSON này trên máy tính của bạn!`);
-      return;
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('File open picker fallback:', err);
-    }
-  }
-
-  // Fallback to traditional file input for iOS Safari / Mobile
-  const hiddenInput = document.getElementById('importJsonFile');
-  if (hiddenInput) {
-    hiddenInput.click();
-  }
-}
-
-async function flushDiskSave() {
-  if (vocabState.activeFileHandle) {
-    try {
-      const payload = {
-        version: vocabState.version,
-        sourceFileName: vocabState.sourceFileName,
-        vocabulary: vocabState.vocabulary,
-        studyLogs: vocabState.studyLogs || {}
-      };
-      const writable = await vocabState.activeFileHandle.createWritable();
-      await writable.write(JSON.stringify(payload, null, 2));
-      await writable.close();
-      console.log(`[Flush] Saved "${vocabState.sourceFileName}" directly to disk.`);
-    } catch (e) {
-      console.warn('[Flush] Could not flush to disk handle:', e);
-    }
-  }
-}
-
-async function closeCurrentFile() {
-  if (confirm(`Bạn có muốn đóng file "${vocabState.sourceFileName}" và quay về danh sách trống không?`)) {
-    await flushDiskSave(); // Ensure disk file is updated before closing
-    saveData(); // Save current file progress in localStorage
-
-    const oldFileName = vocabState.sourceFileName;
-    const oldVocab = { ...vocabState.vocabulary };
-    const oldLogs = { ...vocabState.studyLogs };
-
-    vocabState.activeFileHandle = null;
-    vocabState.sourceFileName = 'Danh sách trống';
-    vocabState.vocabulary = {};
-    vocabState.studyLogs = {};
-    
-    if (!vocabState.allFiles) vocabState.allFiles = {};
-    if (oldFileName && oldFileName !== 'Danh sách trống') {
-      vocabState.allFiles[oldFileName] = {
-        vocabulary: oldVocab,
-        studyLogs: oldLogs,
-        lastModified: new Date().toISOString()
-      };
-    }
-
-    vocabState.allFiles['Danh sách trống'] = {
-      vocabulary: {},
-      studyLogs: {}
-    };
-
-    saveData();
-    renderApp();
-    alert('Đã lưu tiến trình và đóng file thành công.');
-  }
-}
-
 function handleFileImport(e) {
   const file = e.target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = async (event) => {
+  reader.onload = (event) => {
     try {
       const data = JSON.parse(event.target.result);
       if (data && (data.vocabulary || typeof data === 'object')) {
-        const diskVocab = data.vocabulary || data;
+        const newVocab = data.vocabulary || data;
         const fileName = file.name || 'Imported.json';
 
-        // Flush active file first
-        await flushDiskSave();
-        saveData();
-
-        // Smart Merge: Preserve newly added/edited words stored in local memory for this file!
-        let mergedVocab = { ...diskVocab };
-        if (vocabState.allFiles && vocabState.allFiles[fileName] && vocabState.allFiles[fileName].vocabulary) {
-          const storedVocab = vocabState.allFiles[fileName].vocabulary;
-          mergedVocab = { ...diskVocab, ...storedVocab };
-        }
-
-        vocabState.activeFileHandle = null;
         vocabState.sourceFileName = fileName;
-        vocabState.vocabulary = mergedVocab;
-        vocabState.studyLogs = data.studyLogs || (vocabState.allFiles[fileName] ? vocabState.allFiles[fileName].studyLogs : {});
+        vocabState.vocabulary = newVocab;
+        vocabState.studyLogs = data.studyLogs || {};
 
-        if (!vocabState.allFiles) vocabState.allFiles = {};
-        vocabState.allFiles[fileName] = {
-          vocabulary: mergedVocab,
-          studyLogs: vocabState.studyLogs,
-          lastModified: new Date().toISOString()
-        };
-
-        saveData(); // Auto-persist merged dataset!
+        saveData(); // Save imported data to localStorage
         renderApp();
-        alert(`Đã mở file "${fileName}" (${Object.keys(vocabState.vocabulary).length} từ vựng). Toàn bộ từ mới đã được bảo toàn 100%!`);
+        alert(`✅ Đã nhập thành công file "${fileName}" (${Object.keys(vocabState.vocabulary).length} từ vựng)!`);
       } else {
-        alert('File JSON không đúng định dạng từ vựng!');
+        alert('❌ File JSON không đúng định dạng từ vựng!');
       }
     } catch (err) {
-      alert('Không thể đọc file JSON này. Vui lòng kiểm tra lại!');
+      alert('❌ Không thể đọc file JSON này. Vui lòng kiểm tra lại!');
       console.error(err);
     } finally {
-      e.target.value = ''; // Reset input so re-selecting same file fires change event!
+      e.target.value = ''; // Reset file input so re-importing same file works every time
     }
   };
   reader.readAsText(file);
+}
+
+function exportDataJson() {
+  const count = Object.keys(vocabState.vocabulary).length;
+  if (count === 0) {
+    if (!confirm('Danh sách từ vựng hiện đang trống. Bạn vẫn muốn xuất file JSON chứ?')) return;
+  }
+
+  const payload = {
+    version: vocabState.version,
+    sourceFileName: vocabState.sourceFileName || 'Vocabulary.json',
+    vocabulary: vocabState.vocabulary,
+    studyLogs: vocabState.studyLogs || {}
+  };
+
+  const jsonString = JSON.stringify(payload, null, 2);
+  const fileName = (vocabState.sourceFileName && vocabState.sourceFileName !== 'Danh sách trống') 
+    ? (vocabState.sourceFileName.endsWith('.json') ? vocabState.sourceFileName : `${vocabState.sourceFileName}.json`)
+    : 'Vocabulary.json';
+
+  // Check iOS Web Share API
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIOS && navigator.share && navigator.canShare) {
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const file = new File([blob], fileName, { type: 'application/json' });
+    if (navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: fileName })
+        .catch(err => console.warn('iOS Share cancelled:', err));
+      return;
+    }
+  }
+
+  // Desktop / Mobile Fallback Download
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 // Master Render
@@ -1288,12 +999,6 @@ function removeMeaningRow(rowId) {
 }
 
 function openWordModal(wordKey = null) {
-  // Prevent adding words if no file dataset is active
-  if (!wordKey && (vocabState.sourceFileName === 'Danh sách trống' || !vocabState.sourceFileName)) {
-    alert('⚠️ Bạn chưa chọn file từ vựng!\nVui lòng bấm "📂 Mở file" hoặc "➕ Tạo file" trước khi thêm từ vựng mới.');
-    return;
-  }
-
   vocabState.editingWord = wordKey;
   const modal = document.getElementById('wordModal');
   const title = document.getElementById('modalTitle');

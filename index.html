@@ -53,13 +53,15 @@
       <div class="ios-status-bar">
         <div class="ios-status-item">
           <span class="ios-status-dot"></span>
-          <span id="currentFileName">Danh sách trống</span>
+          <span id="currentFileName">Từ vựng của tôi</span>
         </div>
         <div class="ios-status-actions">
-          <button class="ios-file-btn" id="saveCurrentFileBtn" title="Lưu file JSON hiện tại">💾 Lưu file</button>
-          <button class="ios-file-btn" id="openFilePickerBtn" title="Mở file JSON">📂 Mở file</button>
-          <button class="ios-file-btn" id="createNewFileBtn" title="Tạo file từ vựng mới">➕ Tạo file</button>
-          <button class="ios-file-btn btn-close-file" id="closeCurrentFileBtn" title="Đóng file">❌ Đóng file</button>
+          <label for="importJsonFile" class="ios-file-btn" title="Nhập file JSON từ máy tính hoặc Tệp">
+            📥 Nhập JSON
+          </label>
+          <button class="ios-file-btn" id="exportJsonBtn" title="Xuất file JSON về máy">
+            📤 Xuất JSON
+          </button>
           <div class="ios-status-badge" id="vocabCountBadge">0 từ vựng</div>
         </div>
       </div>
@@ -279,37 +281,21 @@
 
           <div class="settings-item">
             <div>
-              <strong>➕ Tạo file từ vựng mới</strong>
-              <p>Tạo bộ từ vựng mới độc lập với tên file tùy chỉnh</p>
-            </div>
-            <button class="ios-btn-secondary" id="settingsCreateNewFileBtn">Tạo mới</button>
-          </div>
-
-          <div class="settings-item">
-            <div>
-              <strong>❌ Đóng/Thoát file hiện tại</strong>
-              <p>Lưu tự động và quay về bộ dữ liệu mặc định</p>
-            </div>
-            <button class="ios-btn-secondary" id="settingsCloseCurrentFileBtn" style="color: var(--accent-danger);">Đóng file</button>
-          </div>
-
-          <div class="settings-item">
-            <div>
-              <strong>Xuất file JSON chuẩn</strong>
-              <p>Lưu dữ liệu sang PC hoặc gửi qua AirDrop / Files app</p>
-            </div>
-            <button class="ios-btn-secondary" id="settingsExportJsonBtn">Xuất JSON</button>
-          </div>
-          
-          <div class="settings-item">
-            <div>
-              <strong>Nhập file JSON</strong>
-              <p>Mở file JSON từ ứng dụng Tệp (Files) trên iPhone/iPad</p>
+              <strong>📥 Nhập tệp từ vựng JSON</strong>
+              <p>Nạp file JSON từ máy tính hoặc ứng dụng Tệp (Files) trên iPhone/iPad</p>
             </div>
             <label for="settingsImportJsonFile" class="ios-btn-secondary" style="cursor: pointer;">
               Nhập JSON
             </label>
             <input type="file" id="settingsImportJsonFile" accept=".json" style="display: none;">
+          </div>
+
+          <div class="settings-item">
+            <div>
+              <strong>📤 Xuất tệp từ vựng JSON</strong>
+              <p>Lưu dữ liệu sang PC hoặc gửi qua AirDrop / Zalo / Tệp app</p>
+            </div>
+            <button class="ios-btn-secondary" id="settingsExportJsonBtn">Xuất JSON</button>
           </div>
 
           <div class="settings-item">
@@ -361,26 +347,6 @@
         <span>Cài đặt</span>
       </button>
     </nav>
-
-    <!-- iOS Slide-Up Modal: Create New File -->
-    <div id="createFileModal" class="ios-modal-overlay">
-      <div class="ios-modal-card" style="max-width: 440px;">
-        <div class="ios-modal-header">
-          <h3>➕ Tạo File Từ Vựng Mới</h3>
-          <button id="closeCreateFileModalBtn" class="ios-modal-close">✕</button>
-        </div>
-        <form id="createFileForm" class="ios-modal-body">
-          <div class="form-group">
-            <label for="newFileNameInput">Tên file từ vựng (.json) *</label>
-            <input type="text" id="newFileNameInput" placeholder="Ví dụ: HSK1.json, Bai1.json" required autocomplete="off">
-          </div>
-          <div class="ios-modal-actions" style="margin-top: 16px;">
-            <button type="button" class="ios-btn-secondary" id="cancelCreateFileModalBtn">Hủy</button>
-            <button type="submit" class="ios-btn-primary">Tạo & Chọn thư mục 📁</button>
-          </div>
-        </form>
-      </div>
-    </div>
 
     <!-- iOS Slide-Up Modal: Add / Edit Word -->
     <div id="wordModal" class="ios-modal-overlay">
