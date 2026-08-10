@@ -375,10 +375,13 @@ function bindEvents() {
   // Form Submit
   document.getElementById('wordForm')?.addEventListener('submit', handleWordFormSubmit);
 
-  // Open File / Create / Close File Buttons
+  // Open File / Create / Close File Buttons & Modal
   document.getElementById('openFilePickerBtn')?.addEventListener('click', openFileWithPicker);
-  document.getElementById('createNewFileBtn')?.addEventListener('click', createNewFile);
-  document.getElementById('settingsCreateNewFileBtn')?.addEventListener('click', createNewFile);
+  document.getElementById('createNewFileBtn')?.addEventListener('click', openCreateFileModal);
+  document.getElementById('settingsCreateNewFileBtn')?.addEventListener('click', openCreateFileModal);
+  document.getElementById('closeCreateFileModalBtn')?.addEventListener('click', closeCreateFileModal);
+  document.getElementById('cancelCreateFileModalBtn')?.addEventListener('click', closeCreateFileModal);
+  document.getElementById('createFileForm')?.addEventListener('submit', handleCreateFileSubmit);
   document.getElementById('closeCurrentFileBtn')?.addEventListener('click', closeCurrentFile);
   document.getElementById('settingsCloseCurrentFileBtn')?.addEventListener('click', closeCurrentFile);
 
@@ -425,34 +428,45 @@ function bindEvents() {
 /* ==========================================================================
    MULTI-FILE MANAGEMENT & JSON PERSISTENCE
    ========================================================================== */
-async function createNewFile() {
-  let defaultName = prompt('Nhập tên file từ vựng mới (ví dụ: HSK1.json):', 'HSK1.json');
-  if (!defaultName || !defaultName.trim()) return;
-  defaultName = defaultName.trim();
-  if (!defaultName.endsWith('.json')) defaultName += '.json';
+function openCreateFileModal() {
+  const modal = document.getElementById('createFileModal');
+  const input = document.getElementById('newFileNameInput');
+  if (input) input.value = '';
+  if (modal) modal.classList.add('active');
+}
 
-  let fileName = defaultName;
+function closeCreateFileModal() {
+  const modal = document.getElementById('createFileModal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function handleCreateFileSubmit(e) {
+  e.preventDefault();
+
+  let inputName = document.getElementById('newFileNameInput').value.trim();
+  if (!inputName) return;
+  if (!inputName.endsWith('.json')) inputName += '.json';
+
+  closeCreateFileModal();
+
+  const fileName = inputName;
 
   // 1. Native Save File Picker API (Opens OS File Explorer / Directory Selector on PC)
   if ('showSaveFilePicker' in window) {
     try {
       const handle = await window.showSaveFilePicker({
-        suggestedName: defaultName,
+        suggestedName: fileName,
         types: [{
           description: 'Tệp Từ Vựng JSON',
           accept: { 'application/json': ['.json'] }
         }]
       });
 
-      fileName = handle.name || defaultName;
-
-      // Save active file progress first
       saveData();
 
-      // Create initial JSON payload and write to chosen directory path
       const initialPayload = {
         version: vocabState.version,
-        sourceFileName: fileName,
+        sourceFileName: handle.name,
         vocabulary: {},
         studyLogs: {}
       };
@@ -461,23 +475,22 @@ async function createNewFile() {
       await writable.write(JSON.stringify(initialPayload, null, 2));
       await writable.close();
 
-      // Switch active file dataset in app
       vocabState.activeFileHandle = handle;
-      vocabState.sourceFileName = fileName;
+      vocabState.sourceFileName = handle.name;
       vocabState.vocabulary = {};
       vocabState.studyLogs = {};
       saveData();
 
       renderApp();
-      alert(`Đã tạo và chọn đường dẫn lưu file thành công tại: "${fileName}"!`);
+      alert(`Đã tạo và chọn đường dẫn lưu file thành công tại: "${handle.name}"!`);
       return;
     } catch (err) {
-      if (err.name === 'AbortError') return; // User cancelled save dialog
+      if (err.name === 'AbortError') return;
       console.warn('Native file picker fallback:', err);
     }
   }
 
-  // 2. Mobile / iOS Safari: Switch active dataset immediately in app & trigger native "Lưu vào Tệp" sheet
+  // 2. Mobile / iOS Safari: Save dataset in memory & trigger native "Lưu vào Tệp" Share Sheet
   saveData();
 
   vocabState.activeFileHandle = null;
@@ -487,7 +500,7 @@ async function createNewFile() {
   saveData();
   renderApp();
 
-  // Trigger iOS Native Web Share Sheet -> User selects "Lưu vào Tệp" (Save to Files)!
+  // Trigger iOS Native Web Share Sheet IMMEDIATELY on form submit gesture!
   const initialPayload = {
     version: vocabState.version,
     sourceFileName: fileName,
@@ -509,6 +522,8 @@ async function createNewFile() {
       if (err.name === 'AbortError') return;
       console.warn('iOS Web Share error:', err);
     }
+  } else {
+    alert(`Đã tạo và mở file từ vựng mới "${fileName}"! Bạn có thể bắt đầu gõ thêm từ ngay.`);
   }
 }
 

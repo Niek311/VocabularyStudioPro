@@ -361,6 +361,26 @@
       </button>
     </nav>
 
+    <!-- iOS Slide-Up Modal: Create New File -->
+    <div id="createFileModal" class="ios-modal-overlay">
+      <div class="ios-modal-card" style="max-width: 440px;">
+        <div class="ios-modal-header">
+          <h3>➕ Tạo File Từ Vựng Mới</h3>
+          <button id="closeCreateFileModalBtn" class="ios-modal-close">✕</button>
+        </div>
+        <form id="createFileForm" class="ios-modal-body">
+          <div class="form-group">
+            <label for="newFileNameInput">Tên file từ vựng (.json) *</label>
+            <input type="text" id="newFileNameInput" placeholder="Ví dụ: HSK1.json, Bai1.json" required autocomplete="off">
+          </div>
+          <div class="ios-modal-actions" style="margin-top: 16px;">
+            <button type="button" class="ios-btn-secondary" id="cancelCreateFileModalBtn">Hủy</button>
+            <button type="submit" class="ios-btn-primary">Tạo & Chọn thư mục 📁</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- iOS Slide-Up Modal: Add / Edit Word -->
     <div id="wordModal" class="ios-modal-overlay">
       <div class="ios-modal-card">
