@@ -456,8 +456,7 @@ async function manualSaveFile() {
     await flushDiskSave();
     alert(`Đã lưu trực tiếp tiến trình từ vựng vào file "${vocabState.sourceFileName}" trên máy tính thành công!`);
   } else {
-    exportDataJson();
-    alert(`Đã tự động lưu tiến trình và cập nhật ghi đè dữ liệu từ vựng mới nhất vào file "${vocabState.sourceFileName}"!`);
+    alert(`✅ Đã lưu thành công toàn bộ từ vựng & tiến trình mới nhất vào file "${vocabState.sourceFileName}"!`);
   }
 }
 function openCreateFileModal() {
