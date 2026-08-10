@@ -543,18 +543,42 @@ async function handleCreateFileSubmit(e) {
 }
 
 function triggerDirectFileDownload(fileName, dataContent) {
+  // Only works on Desktop browsers (Chrome/Edge), NOT on iOS Safari
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    // On iOS: use Web Share API to let user choose "Lưu vào Tệp"
+    const jsonString = typeof dataContent === 'string' ? dataContent : JSON.stringify(dataContent, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const safeName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+    const file = new File([blob], safeName, { type: 'application/json' });
+    
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: safeName }).catch(() => {});
+    }
+    return;
+  }
+
+  // Desktop: standard blob download
   const jsonString = typeof dataContent === 'string' ? dataContent : JSON.stringify(dataContent, null, 2);
   const blob = new Blob([jsonString], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
-
-  const downloadAnchor = document.createElement('a');
-  downloadAnchor.href = url;
-  downloadAnchor.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
-
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function exportDataJson() {
+  const payload = {
+    version: vocabState.version,
+    sourceFileName: vocabState.sourceFileName,
+    vocabulary: vocabState.vocabulary,
+    studyLogs: vocabState.studyLogs || {}
+  };
+
+  triggerDirectFileDownload(vocabState.sourceFileName, payload);
 }
 
 async function openFileWithPicker() {
@@ -697,17 +721,6 @@ function handleFileImport(e) {
     }
   };
   reader.readAsText(file);
-}
-
-function exportDataJson() {
-  const payload = {
-    version: vocabState.version,
-    sourceFileName: vocabState.sourceFileName,
-    vocabulary: vocabState.vocabulary,
-    studyLogs: vocabState.studyLogs || {}
-  };
-
-  triggerDirectFileDownload(vocabState.sourceFileName, payload);
 }
 
 // Master Render
