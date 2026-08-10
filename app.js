@@ -490,7 +490,7 @@ async function handleCreateFileSubmit(e) {
     }
   }
 
-  // 2. Mobile / iOS Safari: Save dataset in memory & trigger native "Lưu vào Tệp" Share Sheet
+  // 2. Mobile / iOS Safari: Save dataset in memory & download directly to Files (Tệp)
   saveData();
 
   vocabState.activeFileHandle = null;
@@ -500,7 +500,6 @@ async function handleCreateFileSubmit(e) {
   saveData();
   renderApp();
 
-  // Trigger iOS Native Web Share Sheet IMMEDIATELY on form submit gesture!
   const initialPayload = {
     version: vocabState.version,
     sourceFileName: fileName,
@@ -508,23 +507,23 @@ async function handleCreateFileSubmit(e) {
     studyLogs: {}
   };
 
-  const blob = new Blob([JSON.stringify(initialPayload, null, 2)], { type: 'application/json' });
-  const file = new File([blob], fileName, { type: 'application/json' });
+  triggerDirectFileDownload(fileName, initialPayload);
+  alert(`Đã tạo và kích hoạt bộ từ vựng mới "${fileName}"!`);
+}
 
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: fileName,
-        text: `Tệp từ vựng mới: ${fileName}`
-      });
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('iOS Web Share error:', err);
-    }
-  } else {
-    alert(`Đã tạo và mở file từ vựng mới "${fileName}"! Bạn có thể bắt đầu gõ thêm từ ngay.`);
-  }
+function triggerDirectFileDownload(fileName, dataContent) {
+  const jsonString = typeof dataContent === 'string' ? dataContent : JSON.stringify(dataContent, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.href = url;
+  downloadAnchor.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 async function openFileWithPicker() {
@@ -656,14 +655,7 @@ function exportDataJson() {
     studyLogs: vocabState.studyLogs || {}
   };
 
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
-  const downloadAnchor = document.createElement('a');
-  downloadAnchor.setAttribute("href", dataStr);
-  const downloadName = vocabState.sourceFileName.endsWith('.json') ? vocabState.sourceFileName : `${vocabState.sourceFileName}.json`;
-  downloadAnchor.setAttribute("download", downloadName);
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
+  triggerDirectFileDownload(vocabState.sourceFileName, payload);
 }
 
 // Master Render
