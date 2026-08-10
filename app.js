@@ -522,8 +522,11 @@ async function openFileWithPicker() {
     }
   }
 
-  // Fallback to traditional file input
-  document.getElementById('importJsonFile')?.click();
+  // Fallback to traditional file input for iOS Safari / Mobile
+  const hiddenInput = document.getElementById('importJsonFile');
+  if (hiddenInput) {
+    hiddenInput.click();
+  }
 }
 
 async function flushDiskSave() {
