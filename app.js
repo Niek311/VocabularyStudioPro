@@ -221,10 +221,77 @@ function bindEvents() {
     renderDirectory();
   });
 
-  // Modal Open/Close
+  // Modal Open/Close & Meaning Rows
   document.getElementById('openAddWordModalBtn')?.addEventListener('click', () => openWordModal());
   document.getElementById('closeModalBtn')?.addEventListener('click', closeWordModal);
   document.getElementById('cancelModalBtn')?.addEventListener('click', closeWordModal);
+  document.getElementById('addMeaningRowBtn')?.addEventListener('click', () => addMeaningInputRow(''));
+
+  // Auto Lookup Pinyin & Hán Việt AFTER user finishes entering Hanzi (Từ gốc)
+  const wordInput = document.getElementById('inputWord');
+  let isComposingChinese = false;
+  let lookupTimer = null;
+
+  const triggerAutoLookup = () => {
+    if (vocabState.editingWord) return;
+    if (!wordInput) return;
+
+    const val = wordInput.value.trim();
+    const pinyinInput = document.getElementById('inputPinyin');
+    const hanvietInput = document.getElementById('inputHanViet');
+
+    // If word input is erased/empty, clear Pinyin & Hán Việt immediately
+    if (!val) {
+      if (pinyinInput) pinyinInput.value = '';
+      if (hanvietInput) hanvietInput.value = '';
+      return;
+    }
+
+    const res = lookupHanzi(val);
+    if (pinyinInput && res.pinyin) {
+      pinyinInput.value = res.pinyin;
+    }
+    if (hanvietInput && res.hanviet) {
+      hanvietInput.value = res.hanviet;
+    }
+  };
+
+  if (wordInput) {
+    // When typing via Chinese IME keyboard
+    wordInput.addEventListener('compositionstart', () => {
+      isComposingChinese = true;
+    });
+
+    wordInput.addEventListener('compositionend', () => {
+      isComposingChinese = false;
+      triggerAutoLookup();
+    });
+
+    // When focus leaves the input field (Blur)
+    wordInput.addEventListener('blur', () => {
+      triggerAutoLookup();
+    });
+
+    // When value change completes (Enter or selection)
+    wordInput.addEventListener('change', () => {
+      triggerAutoLookup();
+    });
+
+    // Input event (clears immediately if empty, or debounces lookup)
+    wordInput.addEventListener('input', (e) => {
+      if (!wordInput.value.trim()) {
+        triggerAutoLookup();
+        return;
+      }
+
+      if (e.isComposing || isComposingChinese) return;
+
+      clearTimeout(lookupTimer);
+      lookupTimer = setTimeout(() => {
+        triggerAutoLookup();
+      }, 500);
+    });
+  }
 
   // Form Submit
   document.getElementById('wordForm')?.addEventListener('submit', handleWordFormSubmit);
@@ -334,7 +401,7 @@ function renderDirectory() {
         <div class="vocab-hanzi">${escapeHtml(item.hanzi)}</div>
         <div class="vocab-info">
           <div class="vocab-pinyin">${escapeHtml(item.pinyin || '')}</div>
-          <div class="vocab-meaning">${escapeHtml(item.meaning || '')}</div>
+          <div class="vocab-meaning">${formatMeaningDisplay(item.meaning)}</div>
           ${item.han_viet ? `<div class="vocab-hanviet">Hán Việt: ${escapeHtml(item.han_viet)}</div>` : ''}
         </div>
       </div>
@@ -400,7 +467,7 @@ function renderCurrentFlashcard() {
   document.getElementById('fcCountBadge').textContent = `Gặp ${current.count || 1} lần`;
   document.getElementById('fcPinyin').textContent = current.pinyin || '';
   document.getElementById('fcHanViet').textContent = current.han_viet ? `Hán Việt: ${current.han_viet}` : '';
-  document.getElementById('fcMeaning').textContent = current.meaning || '';
+  document.getElementById('fcMeaning').innerHTML = formatMeaningDisplay(current.meaning);
 
   // Reset Stamps
   document.querySelector('.stamp-pass').style.opacity = '0';
@@ -646,12 +713,41 @@ function speakChinese(text) {
 }
 
 /* ==========================================================================
-   MODAL & CRUD ACTIONS
+   MODAL & CRUD ACTIONS (DYNAMIC MULTIPLE MEANINGS)
    ========================================================================== */
+function addMeaningInputRow(val = '') {
+  const container = document.getElementById('meaningsContainer');
+  if (!container) return;
+
+  const rowId = 'meaning_row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  const div = document.createElement('div');
+  div.className = 'meaning-row';
+  div.id = rowId;
+  div.innerHTML = `
+    <input type="text" class="meaning-input-field" value="${escapeHtml(val)}" placeholder="Nhập nghĩa của từ..." required autocomplete="off">
+    <button type="button" class="btn-remove-meaning" onclick="removeMeaningRow('${rowId}')" title="Xóa nghĩa này">🗑️</button>
+  `;
+  container.appendChild(div);
+}
+
+function removeMeaningRow(rowId) {
+  const row = document.getElementById(rowId);
+  const container = document.getElementById('meaningsContainer');
+  if (row && container) {
+    if (container.children.length > 1) {
+      row.remove();
+    } else {
+      alert('Từ vựng phải có ít nhất 1 nghĩa tiếng Việt!');
+    }
+  }
+}
+
 function openWordModal(wordKey = null) {
   vocabState.editingWord = wordKey;
   const modal = document.getElementById('wordModal');
   const title = document.getElementById('modalTitle');
+  const meaningsContainer = document.getElementById('meaningsContainer');
+  if (meaningsContainer) meaningsContainer.innerHTML = '';
 
   if (wordKey && vocabState.vocabulary[wordKey]) {
     const data = vocabState.vocabulary[wordKey];
@@ -660,16 +756,34 @@ function openWordModal(wordKey = null) {
     document.getElementById('inputWord').disabled = true; // Key cannot be edited
     document.getElementById('inputPinyin').value = data.pinyin || '';
     document.getElementById('inputHanViet').value = data.han_viet || '';
-    document.getElementById('inputMeaning').value = data.meaning || '';
-    document.getElementById('inputCount').value = data.count || 1;
+    const countInput = document.getElementById('inputCount');
+    if (countInput) {
+      countInput.disabled = true;
+      countInput.value = data.count || 1;
+    }
+
+    // Parse existing meanings (split by ';' or numbered '1. ...')
+    const rawMeaning = data.meaning || '';
+    const parts = rawMeaning.split(';');
+    const cleanParts = parts.map(p => p.replace(/^\d+[\.\:\s]*/, '').trim()).filter(Boolean);
+
+    if (cleanParts.length > 0) {
+      cleanParts.forEach(m => addMeaningInputRow(m));
+    } else {
+      addMeaningInputRow('');
+    }
   } else {
     title.textContent = 'Thêm Từ Vựng Mới';
     document.getElementById('inputWord').value = '';
     document.getElementById('inputWord').disabled = false;
     document.getElementById('inputPinyin').value = '';
     document.getElementById('inputHanViet').value = '';
-    document.getElementById('inputMeaning').value = '';
-    document.getElementById('inputCount').value = 1;
+    const countInput = document.getElementById('inputCount');
+    if (countInput) {
+      countInput.disabled = true;
+      countInput.value = 1;
+    }
+    addMeaningInputRow('');
   }
 
   modal.classList.add('active');
@@ -686,12 +800,27 @@ function handleWordFormSubmit(e) {
   const word = document.getElementById('inputWord').value.trim();
   const pinyin = document.getElementById('inputPinyin').value.trim();
   const hanViet = document.getElementById('inputHanViet').value.trim();
-  const meaning = document.getElementById('inputMeaning').value.trim();
   const count = parseInt(document.getElementById('inputCount').value, 10) || 1;
 
-  if (!word || !pinyin || !meaning) {
-    alert('Vui lòng điền đầy đủ Từ gốc, Pinyin và Nghĩa!');
+  // Gather all dynamic meaning fields
+  const meaningInputs = document.querySelectorAll('.meaning-input-field');
+  const meanings = [];
+  meaningInputs.forEach(input => {
+    const val = input.value.trim().replace(/^\d+[\.\:\s]*/, '');
+    if (val) meanings.push(val);
+  });
+
+  if (!word || !pinyin || meanings.length === 0) {
+    alert('Vui lòng điền đầy đủ Từ gốc, Pinyin và ít nhất 1 Nghĩa tiếng Việt!');
     return;
+  }
+
+  // Format multiple meanings matching PC version (1. nghĩa A; 2. nghĩa B)
+  let finalMeaning = '';
+  if (meanings.length === 1) {
+    finalMeaning = meanings[0];
+  } else if (meanings.length > 1) {
+    finalMeaning = meanings.map((m, idx) => `${idx + 1}. ${m}`).join('; ');
   }
 
   const now = new Date().toISOString();
@@ -702,7 +831,7 @@ function handleWordFormSubmit(e) {
       ...vocabState.vocabulary[vocabState.editingWord],
       pinyin,
       han_viet: hanViet,
-      meaning,
+      meaning: finalMeaning,
       count,
       last_seen: now
     };
@@ -714,7 +843,7 @@ function handleWordFormSubmit(e) {
       last_seen: now,
       pinyin,
       han_viet: hanViet,
-      meaning
+      meaning: finalMeaning
     };
   }
 
@@ -788,4 +917,112 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function formatMeaningDisplay(rawMeaning) {
+  if (!rawMeaning) return '';
+  const parts = rawMeaning.split(';').map(p => p.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map(p => escapeHtml(p)).join('<br>');
+  }
+  return escapeHtml(rawMeaning);
+}
+
+/* ==========================================================================
+   OFFLINE HANZI AUTO LOOKUP ENGINE (PINYIN & HÁN VIỆT)
+   ========================================================================== */
+const TONE_MAP = {
+  a: ['ā', 'á', 'ǎ', 'à', 'a'],
+  e: ['ē', 'é', 'ě', 'è', 'e'],
+  i: ['ī', 'í', 'ǐ', 'ì', 'i'],
+  o: ['ō', 'ó', 'ǒ', 'ò', 'o'],
+  u: ['ū', 'ú', 'ǔ', 'ù', 'u'],
+  v: ['ǖ', 'ǘ', 'ǚ', 'ǜ', 'ü']
+};
+
+function formatPinyinWithTone(rawPy) {
+  if (!rawPy) return '';
+
+  // If rawPy already contains tone-marked vowels, clean extra non-letters and return
+  if (/[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/i.test(rawPy)) {
+    return rawPy.replace(/[\*\?\(\)\[\]]/g, '').trim();
+  }
+
+  // Clean raw pinyin from asterisks, parentheses
+  let cleanPy = rawPy.replace(/[\*\?\(\)\[\]]/g, '').trim();
+
+  // Convert numbered pinyin e.g. cai2 -> cái, fang1 bian4 -> fāng biàn
+  const converted = cleanPy.replace(/([a-veü]+)([1-5])/gi, (match, syllable, toneNum) => {
+    const tone = parseInt(toneNum, 10) - 1;
+    if (tone < 0 || tone >= 4) return syllable;
+
+    // Standard Pinyin tone placement priority: a, e, ou, or last vowel
+    if (syllable.includes('a')) return syllable.replace('a', TONE_MAP.a[tone]);
+    if (syllable.includes('e')) return syllable.replace('e', TONE_MAP.e[tone]);
+    if (syllable.includes('ou')) return syllable.replace('o', TONE_MAP.o[tone]);
+
+    for (let i = syllable.length - 1; i >= 0; i--) {
+      const char = syllable[i];
+      if (TONE_MAP[char]) {
+        return syllable.substring(0, i) + TONE_MAP[char][tone] + syllable.substring(i + 1);
+      }
+    }
+    return syllable;
+  });
+
+  return converted.replace(/[*?]/g, '').trim();
+}
+
+function lookupHanzi(text) {
+  if (!text) return { pinyin: '', hanviet: '' };
+
+  // 1. Direct match check in existing vocabulary
+  if (vocabState.vocabulary[text]) {
+    return {
+      pinyin: vocabState.vocabulary[text].pinyin || '',
+      hanviet: vocabState.vocabulary[text].han_viet || ''
+    };
+  }
+
+  let pinyinResult = '';
+  let hanvietResult = '';
+
+  if (typeof HANVIET_DICT !== 'undefined') {
+    // 2. Direct match check in 122,000+ word CVDICT dictionary
+    if (HANVIET_DICT[text]) {
+      const entry = HANVIET_DICT[text];
+      if (entry.py) pinyinResult = formatPinyinWithTone(entry.py);
+      if (entry.hv) hanvietResult = entry.hv.split(',')[0].replace(/['"\[\]]/g, '').trim();
+    }
+
+    // 3. Fallback character-by-character lookup
+    const pyList = [];
+    const hvList = [];
+
+    for (const char of text) {
+      if (HANVIET_DICT[char]) {
+        const info = HANVIET_DICT[char];
+        if (info.py) pyList.push(formatPinyinWithTone(info.py));
+        if (info.hv) {
+          const cleanHv = info.hv.split(',')[0].replace(/['"\[\]]/g, '').trim();
+          hvList.push(cleanHv);
+        }
+      } else {
+        pyList.push(char);
+        hvList.push(char);
+      }
+    }
+
+    if (!pinyinResult && pyList.length > 0) {
+      pinyinResult = pyList.join(' ');
+    }
+    if (!hanvietResult && hvList.length > 0) {
+      hanvietResult = hvList.join(' ');
+    }
+  }
+
+  return {
+    pinyin: pinyinResult,
+    hanviet: hanvietResult
+  };
 }

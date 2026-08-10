@@ -331,12 +331,19 @@
             <input type="text" id="inputHanViet" placeholder="VD: học tập" autocomplete="off">
           </div>
           <div class="form-group">
-            <label for="inputMeaning">Nghĩa tiếng Việt *</label>
-            <input type="text" id="inputMeaning" placeholder="VD: học tập, nghiên cứu" required autocomplete="off">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <label>Nghĩa tiếng Việt *</label>
+              <button type="button" class="ios-btn-mini" id="addMeaningRowBtn" style="color: var(--accent-primary); border-color: var(--accent-primary);">
+                + Thêm nghĩa
+              </button>
+            </div>
+            <div id="meaningsContainer" class="meanings-container">
+              <!-- Dynamic Meaning Input Rows Injected Here -->
+            </div>
           </div>
           <div class="form-group">
-            <label for="inputCount">Số lần gặp</label>
-            <input type="number" id="inputCount" value="1" min="1">
+            <label for="inputCount">Số lần gặp (Tự động đếm)</label>
+            <input type="number" id="inputCount" value="1" min="1" disabled style="opacity: 0.65; cursor: not-allowed; background: rgba(0,0,0,0.2);">
           </div>
           <div class="ios-modal-actions">
             <button type="button" class="ios-btn-secondary" id="cancelModalBtn">Hủy</button>
@@ -348,7 +355,8 @@
 
   </div>
 
-  <!-- Main JavaScript App Engine -->
+  <!-- Data Dictionary & Main JavaScript App Engine -->
+  <script src="hanviet_dict.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

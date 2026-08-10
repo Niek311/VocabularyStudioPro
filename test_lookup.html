@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="hanviet_dict.js"></script>
+</head>
+<body>
+<script>
+const TONE_MAP = {
+  a: ['ā', 'á', 'ǎ', 'à', 'a'],
+  e: ['ē', 'é', 'ě', 'è', 'e'],
+  i: ['ī', 'í', 'ǐ', 'ì', 'i'],
+  o: ['ō', 'ó', 'ǒ', 'ò', 'o'],
+  u: ['ū', 'ú', 'ǔ', 'ù', 'u'],
+  v: ['ǖ', 'ǘ', 'ǚ', 'ǜ', 'ü']
+};
+
+function formatPinyinWithTone(rawPy) {
+  if (!rawPy) return '';
+  let cleanPy = rawPy.replace(/[\*\?\(\)]/g, '').trim();
+  return cleanPy.replace(/([a-veü]+)([1-5])/gi, (match, syllable, toneNum) => {
+    const tone = parseInt(toneNum, 10) - 1;
+    if (tone < 0 || tone >= 4) return syllable;
+    if (syllable.includes('a')) return syllable.replace('a', TONE_MAP.a[tone]);
+    if (syllable.includes('e')) return syllable.replace('e', TONE_MAP.e[tone]);
+    if (syllable.includes('ou')) return syllable.replace('o', TONE_MAP.o[tone]);
+    for (let i = syllable.length - 1; i >= 0; i--) {
+      const char = syllable[i];
+      if (TONE_MAP[char]) {
+        return syllable.substring(0, i) + TONE_MAP[char][tone] + syllable.substring(i + 1);
+      }
+    }
+    return syllable;
+  });
+}
+
+function lookupHanzi(text) {
+  const pyList = [];
+  const hvList = [];
+  if (typeof HANVIET_DICT !== 'undefined') {
+    for (const char of text) {
+      if (HANVIET_DICT[char]) {
+        const info = HANVIET_DICT[char];
+        if (info.py) pyList.push(formatPinyinWithTone(info.py));
+        if (info.hv) {
+          const cleanHv = info.hv.split(',')[0].replace(/['"\[\]]/g, '').trim();
+          hvList.push(cleanHv);
+        }
+      } else {
+        pyList.push(char);
+        hvList.push(char);
+      }
+    }
+  }
+  return { pinyin: pyList.join(' '), hanviet: hvList.join(' ') };
+}
+
+console.log("TEST 方便:", lookupHanzi("方便"));
+console.log("TEST 学习:", lookupHanzi("学习"));
+</script>
+</body>
+</html>
