@@ -455,6 +455,32 @@ async function manualSaveFile() {
   if (vocabState.activeFileHandle) {
     await flushDiskSave();
     alert(`Đã lưu trực tiếp tiến trình từ vựng vào file "${vocabState.sourceFileName}" trên máy tính thành công!`);
+    return;
+  }
+
+  // On iOS / Mobile: Trigger Web Share Sheet so user can tap "Lưu vào Tệp" to update file in iPhone Files app!
+  const payload = {
+    version: vocabState.version,
+    sourceFileName: vocabState.sourceFileName,
+    vocabulary: vocabState.vocabulary,
+    studyLogs: vocabState.studyLogs || {}
+  };
+
+  const fileName = vocabState.sourceFileName.endsWith('.json') ? vocabState.sourceFileName : `${vocabState.sourceFileName}.json`;
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const file = new File([blob], fileName, { type: 'application/json' });
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: fileName,
+        text: `Lưu tệp từ vựng: ${fileName}`
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.warn('iOS Share error:', err);
+    }
   } else {
     alert(`✅ Đã lưu thành công toàn bộ từ vựng & tiến trình mới nhất vào file "${vocabState.sourceFileName}"!`);
   }
@@ -521,7 +547,7 @@ async function handleCreateFileSubmit(e) {
     }
   }
 
-  // 2. Mobile / iOS Safari: Create & activate dataset in app without any popup or share screen
+  // 2. Mobile / iOS Safari: Save dataset in memory & trigger native "Lưu vào Tệp" Share Sheet
   saveData();
 
   vocabState.activeFileHandle = null;
@@ -539,7 +565,29 @@ async function handleCreateFileSubmit(e) {
   saveData();
   renderApp();
 
-  alert(`Đã tạo và kích hoạt file từ vựng mới "${fileName}" thành công! Bạn có thể gõ thêm từ ngay.`);
+  // Trigger iOS Native Web Share Sheet -> User selects "Lưu vào Tệp" (Save to Files)!
+  const initialPayload = {
+    version: vocabState.version,
+    sourceFileName: fileName,
+    vocabulary: {},
+    studyLogs: {}
+  };
+
+  const blob = new Blob([JSON.stringify(initialPayload, null, 2)], { type: 'application/json' });
+  const file = new File([blob], fileName, { type: 'application/json' });
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: fileName,
+        text: `Tệp từ vựng mới: ${fileName}`
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.warn('iOS Web Share error:', err);
+    }
+  }
 }
 
 function triggerDirectFileDownload(fileName, dataContent) {
