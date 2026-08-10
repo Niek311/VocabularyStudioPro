@@ -521,40 +521,25 @@ async function handleCreateFileSubmit(e) {
     }
   }
 
-  // 2. Mobile / iOS Safari: Save dataset in memory & trigger native "Lưu vào Tệp" Share Sheet
+  // 2. Mobile / iOS Safari: Create & activate dataset in app without any popup or share screen
   saveData();
 
   vocabState.activeFileHandle = null;
   vocabState.sourceFileName = fileName;
   vocabState.vocabulary = {};
   vocabState.studyLogs = {};
+  
+  if (!vocabState.allFiles) vocabState.allFiles = {};
+  vocabState.allFiles[fileName] = {
+    vocabulary: {},
+    studyLogs: {},
+    lastModified: new Date().toISOString()
+  };
+
   saveData();
   renderApp();
 
-  const initialPayload = {
-    version: vocabState.version,
-    sourceFileName: fileName,
-    vocabulary: {},
-    studyLogs: {}
-  };
-
-  const blob = new Blob([JSON.stringify(initialPayload, null, 2)], { type: 'application/json' });
-  const file = new File([blob], fileName, { type: 'application/json' });
-
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: fileName,
-        text: `Tệp từ vựng mới: ${fileName}`
-      });
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.warn('iOS Web Share error:', err);
-    }
-  } else {
-    triggerDirectFileDownload(fileName, initialPayload);
-  }
+  alert(`Đã tạo và kích hoạt file từ vựng mới "${fileName}" thành công! Bạn có thể gõ thêm từ ngay.`);
 }
 
 function triggerDirectFileDownload(fileName, dataContent) {
