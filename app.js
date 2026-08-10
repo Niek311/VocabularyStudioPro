@@ -477,18 +477,17 @@ async function createNewFile() {
     }
   }
 
-  // 2. Fallback: Switch dataset & prompt browser file download to choose save path
+  // 2. Mobile / iOS Safari Fallback: Switch active dataset immediately in app
   saveData();
 
+  vocabState.activeFileHandle = null;
   vocabState.sourceFileName = fileName;
   vocabState.vocabulary = {};
   vocabState.studyLogs = {};
   saveData();
 
-  exportDataJson();
-
   renderApp();
-  alert(`Đã tạo file mới "${fileName}"! Bạn có thể lưu file vào bất kỳ thư mục nào mong muốn.`);
+  alert(`Đã tạo và mở file từ vựng mới "${fileName}"! Bạn có thể bắt đầu gõ thêm từ ngay.`);
 }
 
 async function openFileWithPicker() {
