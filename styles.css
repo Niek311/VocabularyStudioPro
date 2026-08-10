@@ -84,12 +84,11 @@ html, body {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  max-width: 600px; /* Optimal iPhone/iPad portrait width */
+  max-width: 100%;
   margin: 0 auto;
   position: relative;
   overflow: hidden;
   background-color: var(--bg-main);
-  box-shadow: var(--shadow-lg);
 }
 
 /* Top iOS Header */
@@ -243,6 +242,29 @@ html, body {
   border-radius: var(--radius-full);
   background-color: var(--accent-success);
   box-shadow: 0 0 6px var(--accent-success);
+}
+
+.ios-file-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.ios-file-btn:active {
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.ios-file-btn.btn-close-file {
+  color: #ff453a;
+  border-color: rgba(255, 59, 48, 0.25);
+  background: rgba(255, 59, 48, 0.1);
 }
 
 .ios-status-badge {
@@ -1140,4 +1162,213 @@ html, body {
 
 .ios-modal-actions button {
   flex: 1;
+}
+
+/* ==========================================================================
+   ANKI SRS & HEATMAP DASHBOARD STYLES
+   ========================================================================== */
+
+/* Anki Deck Status Header Badges */
+.anki-deck-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+.anki-status-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.badge-new { background: rgba(0, 122, 255, 0.15); color: #38bdf8; }
+.badge-learning { background: rgba(255, 149, 0, 0.15); color: var(--accent-warning); }
+.badge-due { background: rgba(52, 199, 89, 0.15); color: var(--accent-success); }
+
+/* Anki 4-Rating Buttons Bar */
+.anki-rating-controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.anki-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.anki-btn:active {
+  transform: scale(0.92);
+}
+
+.anki-btn-time {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  margin-bottom: 2px;
+}
+
+.anki-btn-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.btn-again { background: rgba(255, 59, 48, 0.15); color: #ff453a; border-color: rgba(255, 59, 48, 0.3); }
+.btn-hard { background: rgba(255, 149, 0, 0.15); color: #ff9f0a; border-color: rgba(255, 149, 0, 0.3); }
+.btn-good { background: rgba(52, 199, 89, 0.15); color: #30d158; border-color: rgba(52, 199, 89, 0.3); }
+.btn-easy { background: rgba(0, 122, 255, 0.15); color: #64d2ff; border-color: rgba(0, 122, 255, 0.3); }
+
+/* Anki Streak Banner */
+.anki-streak-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(255, 149, 0, 0.15), rgba(255, 59, 48, 0.15));
+  border: 1px solid rgba(255, 149, 0, 0.3);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.streak-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.streak-count {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--accent-warning);
+}
+
+.streak-sub {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* Anki Heatmap Grid (365 Days) */
+.anki-heatmap-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.anki-heatmap-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 10px);
+  grid-auto-flow: column;
+  grid-auto-columns: 10px;
+  gap: 3px;
+  min-width: 500px;
+}
+
+.heatmap-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: transform 0.1s ease;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.3);
+}
+
+.heatmap-cell.level-0 { background-color: rgba(255, 255, 255, 0.05); }
+.heatmap-cell.level-1 { background-color: rgba(52, 199, 89, 0.3); }
+.heatmap-cell.level-2 { background-color: rgba(52, 199, 89, 0.55); }
+.heatmap-cell.level-3 { background-color: rgba(52, 199, 89, 0.8); }
+.heatmap-cell.level-4 { background-color: #30d158; box-shadow: 0 0 6px #30d158; }
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.legend-box {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.legend-box.level-0 { background-color: rgba(255, 255, 255, 0.05); }
+.legend-box.level-1 { background-color: rgba(52, 199, 89, 0.3); }
+.legend-box.level-2 { background-color: rgba(52, 199, 89, 0.55); }
+.legend-box.level-3 { background-color: rgba(52, 199, 89, 0.8); }
+.legend-box.level-4 { background-color: #30d158; }
+
+/* ==========================================================================
+   UNIVERSAL RESPONSIVE DESIGN (IPAD & TABLET & DESKTOP OPTIMIZATION)
+   ========================================================================== */
+@media (min-width: 768px) {
+  .ios-vocab-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .flashcard-stage {
+    max-width: 600px;
+    height: 380px;
+    margin: 0 auto 20px auto;
+  }
+
+  .anki-rating-controls {
+    max-width: 600px;
+    margin: 0 auto 16px auto;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .ios-bottom-nav {
+    max-width: 550px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: var(--radius-full);
+    bottom: 16px;
+    border: 1px solid var(--border-color);
+  }
+
+  .tab-view {
+    padding-left: 32px;
+    padding-right: 32px;
+    padding-bottom: 90px;
+  }
+
+  .ios-header {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .ios-modal-content {
+    max-width: 600px;
+    border-radius: var(--radius-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .ios-vocab-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }

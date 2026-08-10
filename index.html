@@ -53,9 +53,14 @@
       <div class="ios-status-bar">
         <div class="ios-status-item">
           <span class="ios-status-dot"></span>
-          <span id="currentFileName">Vocabulary</span>
+          <span id="currentFileName">Danh sách trống</span>
         </div>
-        <div class="ios-status-badge" id="vocabCountBadge">0 từ vựng</div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="ios-file-btn" id="openFilePickerBtn" title="Mở file JSON từ máy tính">📂 Mở file</button>
+          <button class="ios-file-btn" id="createNewFileBtn" title="Tạo file từ vựng mới">➕ Tạo file</button>
+          <button class="ios-file-btn btn-close-file" id="closeCurrentFileBtn" title="Đóng/Thoát file hiện tại">❌ Đóng file</button>
+          <div class="ios-status-badge" id="vocabCountBadge">0 từ vựng</div>
+        </div>
       </div>
     </header>
 
@@ -78,16 +83,6 @@
               <option value="recent-desc">🕒 Gặp gần đây nhất</option>
               <option value="az">🔤 Từ A - Z</option>
             </select>
-
-            <div class="ios-action-mini-btns">
-              <label for="importJsonFile" class="ios-btn-mini" title="Mở file JSON">
-                📂 Import
-              </label>
-              <input type="file" id="importJsonFile" accept=".json" style="display: none;">
-              <button class="ios-btn-mini" id="exportJsonBtn" title="Xuất file JSON">
-                💾 Export
-              </button>
-            </div>
           </div>
         </div>
 
@@ -107,11 +102,12 @@
       <!-- VIEW 2: FLASHCARDS (TOUCH SWIPE) -->
       <section id="view-flashcards" class="tab-view">
         <div class="flashcards-header">
-          <div class="flashcards-progress-info">
-            <span id="flashcardIndexText">1 / 10</span>
-            <span id="flashcardDeckModeBadge" class="ios-tag">Tất cả từ</span>
+          <div class="anki-deck-status">
+            <span class="anki-status-badge badge-new" id="ankiNewCount">🔵 0 Mới</span>
+            <span class="anki-status-badge badge-learning" id="ankiLearnCount">🟠 0 Đang học</span>
+            <span class="anki-status-badge badge-due" id="ankiDueCount">🟢 0 Đến hạn</span>
           </div>
-          <div class="flashcard-progress-bar-track">
+          <div class="flashcard-progress-bar-track" style="margin-top: 8px;">
             <div id="flashcardProgressBar" class="flashcard-progress-bar-fill" style="width: 0%;"></div>
           </div>
         </div>
@@ -146,19 +142,26 @@
           </div>
         </div>
 
-        <!-- Swipe Gesture Controls & Tips -->
-        <div class="flashcard-controls">
-          <button class="ios-btn-round btn-review" id="fcReviewBtn" title="Chưa thuộc (Vuốt Trái 👈)">
-            <span>👈</span> Chưa nhớ
+        <!-- Anki 4-Button Rating Controls -->
+        <div class="anki-rating-controls" id="ankiRatingControls">
+          <button class="anki-btn btn-again" id="ankiAgainBtn" title="Học lại ngay (1 phút)">
+            <span class="anki-btn-time">1 phút</span>
+            <span class="anki-btn-label">🔴 Học lại</span>
           </button>
-          <button class="ios-btn-round btn-flip" id="fcFlipBtn" title="Lật thẻ">
-            <span>🔄</span> Lật thẻ
+          <button class="anki-btn btn-hard" id="ankiHardBtn" title="Lặp lại sau 1 ngày">
+            <span class="anki-btn-time" id="timeHardLabel">1 ngày</span>
+            <span class="anki-btn-label">🟠 Khó</span>
           </button>
-          <button class="ios-btn-round btn-pass" id="fcPassBtn" title="Đã thuộc (Vuốt Phải 👉)">
-            <span>👉</span> Thuộc
+          <button class="anki-btn btn-good" id="ankiGoodBtn" title="Lặp lại sau 3 ngày">
+            <span class="anki-btn-time" id="timeGoodLabel">3 ngày</span>
+            <span class="anki-btn-label">🟢 Tốt</span>
+          </button>
+          <button class="anki-btn btn-easy" id="ankiEasyBtn" title="Lặp lại sau 7 ngày">
+            <span class="anki-btn-time" id="timeEasyLabel">7 ngày</span>
+            <span class="anki-btn-label">🔵 Dễ</span>
           </button>
         </div>
-        <p class="ios-swipe-tip">💡 <i>Mẹo iOS:</i> Vuốt thẻ sang <b>Phải 👉</b> (Đã nhớ) hoặc <b>Trái 👈</b> (Cần nhớ)</p>
+        <p class="ios-swipe-tip">💡 <i>Mẹo Anki:</i> Đánh giá phản xạ để thuật toán tự động tính lịch ôn tối ưu</p>
       </section>
 
       <!-- VIEW 3: TRẮC NGHIỆM (QUIZ) -->
@@ -200,10 +203,41 @@
         </div>
       </section>
 
-      <!-- VIEW 4: THỐNG KÊ (STATS) -->
+      <!-- VIEW 4: THỐNG KÊ ANKI HEATMAP & DASHBOARD -->
       <section id="view-stats" class="tab-view">
-        <h2 class="section-heading">Thống kê Từ Vựng</h2>
+        <h2 class="section-heading">Thống kê & Chuỗi Học tập</h2>
         
+        <!-- Streak Banner -->
+        <div class="anki-streak-banner">
+          <div class="streak-icon">🔥</div>
+          <div>
+            <div class="streak-count" id="ankiStreakCount">0 ngày liên tục</div>
+            <div class="streak-sub">Duy trì ôn tập mỗi ngày để khắc sâu từ vựng</div>
+          </div>
+        </div>
+
+        <!-- Anki Study Heatmap Grid (365 Days) -->
+        <div class="stats-section-card" style="margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <h3>Lưới nhiệt học tập (Heatmap)</h3>
+            <span style="font-size: 0.75rem; color: var(--text-muted);" id="heatmapTotalReviewed">0 lượt học</span>
+          </div>
+          <div class="anki-heatmap-wrapper">
+            <div id="ankiHeatmapGrid" class="anki-heatmap-grid">
+              <!-- Dynamic Heatmap Cells Injected Here -->
+            </div>
+          </div>
+          <div class="heatmap-legend">
+            <span>Ít</span>
+            <span class="legend-box level-0"></span>
+            <span class="legend-box level-1"></span>
+            <span class="legend-box level-2"></span>
+            <span class="legend-box level-3"></span>
+            <span class="legend-box level-4"></span>
+            <span>Nhiều</span>
+          </div>
+        </div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-icon">📚</div>
@@ -211,14 +245,14 @@
             <div class="stat-lbl">Tổng số từ vựng</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🔥</div>
-            <div class="stat-num" id="statTotalEncountered">0</div>
-            <div class="stat-lbl">Tổng lượt xuất hiện</div>
+            <div class="stat-icon">⏰</div>
+            <div class="stat-num" id="statDueToday" style="color: var(--accent-warning);">0</div>
+            <div class="stat-lbl">Đến hạn ôn hôm nay</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">⭐</div>
-            <div class="stat-num" id="statAvgCount">0</div>
-            <div class="stat-lbl">Trung bình lần gặp / từ</div>
+            <div class="stat-icon">🏆</div>
+            <div class="stat-num" id="statMasteredWords" style="color: var(--accent-success);">0</div>
+            <div class="stat-lbl">Trí nhớ dài hạn (>30d)</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">🎯</div>
@@ -240,7 +274,24 @@
         <h2 class="section-heading">Quản lý & Hướng dẫn iOS</h2>
 
         <div class="settings-group">
-          <h3>Dữ liệu & Đồng bộ</h3>
+          <h3>Dữ liệu & Quản lý File</h3>
+
+          <div class="settings-item">
+            <div>
+              <strong>➕ Tạo file từ vựng mới</strong>
+              <p>Tạo bộ từ vựng mới độc lập với tên file tùy chỉnh</p>
+            </div>
+            <button class="ios-btn-secondary" id="settingsCreateNewFileBtn">Tạo mới</button>
+          </div>
+
+          <div class="settings-item">
+            <div>
+              <strong>❌ Đóng/Thoát file hiện tại</strong>
+              <p>Lưu tự động và quay về bộ dữ liệu mặc định</p>
+            </div>
+            <button class="ios-btn-secondary" id="settingsCloseCurrentFileBtn" style="color: var(--accent-danger);">Đóng file</button>
+          </div>
+
           <div class="settings-item">
             <div>
               <strong>Xuất file JSON chuẩn</strong>
@@ -262,10 +313,10 @@
 
           <div class="settings-item">
             <div>
-              <strong>Dữ liệu thử nghiệm mẫu</strong>
-              <p>Tải từ vựng mẫu tiếng Trung mẫu để trải nghiệm</p>
+              <strong>🧹 Xóa sạch bộ nhớ & Reset ứng dụng</strong>
+              <p>Xóa sạch mọi dữ liệu tạm cũ và đưa ứng dụng về trạng thái trống 100%</p>
             </div>
-            <button class="ios-btn-secondary" id="loadSampleDataBtn">Tải mẫu</button>
+            <button class="ios-btn-secondary" id="clearAllStorageBtn" style="color: var(--accent-danger); border-color: rgba(255,59,48,0.3);">Xóa sạch</button>
           </div>
         </div>
 
@@ -342,8 +393,8 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="inputCount">Số lần gặp (Tự động đếm)</label>
-            <input type="number" id="inputCount" value="1" min="1" disabled style="opacity: 0.65; cursor: not-allowed; background: rgba(0,0,0,0.2);">
+            <label for="inputSavedDate">Ngày lưu từ</label>
+            <input type="text" id="inputSavedDate" disabled style="opacity: 0.75; cursor: not-allowed; background: rgba(0,0,0,0.25);">
           </div>
           <div class="ios-modal-actions">
             <button type="button" class="ios-btn-secondary" id="cancelModalBtn">Hủy</button>
