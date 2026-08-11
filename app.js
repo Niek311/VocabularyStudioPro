@@ -243,7 +243,13 @@ function bindNavigation() {
       const targetTab = btn.getAttribute('data-tab');
       switchTab(targetTab);
     });
-  });
+  // Prevent iOS Safari Rubber-Band / Elastic Window Bounce
+  document.addEventListener('touchmove', function(e) {
+    const scrollable = e.target.closest('.ios-main-content, .ios-modal-card, .meanings-container, .top-words-list');
+    if (!scrollable) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 }
 
 function switchTab(tabName) {
