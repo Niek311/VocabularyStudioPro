@@ -299,9 +299,8 @@ function bindEvents() {
   document.getElementById('cancelModalBtn')?.addEventListener('click', closeWordModal);
   document.getElementById('addMeaningRowBtn')?.addEventListener('click', () => addMeaningInputRow(''));
 
-  // Auto Lookup Pinyin & Hán Việt AFTER user finishes entering Hanzi (Từ gốc)
+  // Auto Lookup Pinyin & Hán Việt AFTER user enters Hanzi (Từ gốc)
   const wordInput = document.getElementById('inputWord');
-  let isComposingChinese = false;
   let lookupTimer = null;
 
   const triggerAutoLookup = () => {
@@ -312,7 +311,7 @@ function bindEvents() {
     const pinyinInput = document.getElementById('inputPinyin');
     const hanvietInput = document.getElementById('inputHanViet');
 
-    // If word input is erased/empty, clear Pinyin & Hán Việt immediately
+    // If word input is erased/empty, clear Pinyin & Hán Việt
     if (!val) {
       if (pinyinInput) pinyinInput.value = '';
       if (hanvietInput) hanvietInput.value = '';
@@ -329,41 +328,52 @@ function bindEvents() {
   };
 
   if (wordInput) {
-    // When typing via Chinese IME keyboard
-    wordInput.addEventListener('compositionstart', () => {
-      isComposingChinese = true;
-    });
-
+    // 1. iOS IME compositionend with timeout delay so value settles in DOM
     wordInput.addEventListener('compositionend', () => {
-      isComposingChinese = false;
-      triggerAutoLookup();
+      setTimeout(() => triggerAutoLookup(), 80);
     });
 
-    // When focus leaves the input field (Blur)
+    // 2. Focus leave (Blur)
     wordInput.addEventListener('blur', () => {
       triggerAutoLookup();
     });
 
-    // When value change completes (Enter or selection)
+    // 3. Value change & paste events
     wordInput.addEventListener('change', () => {
       triggerAutoLookup();
     });
 
-    // Input event (clears immediately if empty, or debounces lookup)
-    wordInput.addEventListener('input', (e) => {
-      if (!wordInput.value.trim()) {
+    wordInput.addEventListener('paste', () => {
+      setTimeout(() => triggerAutoLookup(), 80);
+    });
+
+    // 4. Input & Keyup event (instant for Chinese characters / debounced for typing)
+    const handleInputOrKeyup = () => {
+      const val = wordInput.value.trim();
+      if (!val) {
         triggerAutoLookup();
         return;
       }
 
-      if (e.isComposing || isComposingChinese) return;
+      // If text contains Chinese characters, trigger immediately!
+      if (/[\u4e00-\u9fa5]/.test(val)) {
+        triggerAutoLookup();
+      }
 
       clearTimeout(lookupTimer);
       lookupTimer = setTimeout(() => {
         triggerAutoLookup();
-      }, 500);
-    });
+      }, 250);
+    };
+
+    wordInput.addEventListener('input', handleInputOrKeyup);
+    wordInput.addEventListener('keyup', handleInputOrKeyup);
   }
+
+  // Manual Auto Lookup Button for iOS Safari users
+  document.getElementById('autoLookupBtn')?.addEventListener('click', () => {
+    triggerAutoLookup();
+  });
 
   // Form Submit
   document.getElementById('wordForm')?.addEventListener('submit', handleWordFormSubmit);

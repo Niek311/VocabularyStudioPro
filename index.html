@@ -422,7 +422,12 @@
         </div>
         <form id="wordForm" class="ios-modal-body">
           <div class="form-group">
-            <label for="inputWord">Từ gốc (Chữ Hán) *</label>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <label for="inputWord">Từ gốc (Chữ Hán) *</label>
+              <button type="button" class="ios-btn-mini" id="autoLookupBtn" style="color: var(--accent-success); border-color: var(--accent-success);">
+                🔍 Tra Pinyin & Hán Việt
+              </button>
+            </div>
             <input type="text" id="inputWord" placeholder="VD: 学习" required autocomplete="off" lang="zh">
           </div>
           <div class="form-group">
