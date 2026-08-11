@@ -108,8 +108,8 @@ const SAMPLE_VOCABULARY = {
   }
 };
 
-// Application Initialization
-document.addEventListener('DOMContentLoaded', () => {
+// Application Initialization (Fail-Proof Load Handler)
+function startApp() {
   initTheme();
   loadData();
   bindNavigation();
@@ -117,7 +117,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initTouchSwipe();
   registerServiceWorker();
   renderApp();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
 // Register Service Worker for PWA
 function registerServiceWorker() {
