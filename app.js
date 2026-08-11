@@ -5,25 +5,28 @@
 
 // Initial Application State
 let vocabState = {
-  version: 1,
+  version: 2,
   vocabulary: {},
   sourceFileName: 'Vocabulary',
   activeTab: 'directory',
   theme: localStorage.getItem('ios_vocab_theme') || 'dark',
   searchQuery: '',
-  sortBy: 'count-desc',
+  sortBy: 'recent-desc',
   editingWord: null,
 
   // Flashcards state
   flashcardIndex: 0,
   flashcardFlipped: false,
   flashcardList: [],
+  flashcardSession: 'new', // 'new' | 'due'
 
   // Quiz state
+  quizMode: 'zh-to-vi', // 'zh-to-vi' | 'vi-to-zh' | 'typing'
   quizCurrentQuestion: null,
   quizScore: 0,
   quizTotal: 0,
   quizStreak: 0,
+  quizHintCredits: 3, // Max 3 hints per streak
   quizAnswered: false,
 
   // Touch Swipe State
@@ -398,7 +401,64 @@ function bindEvents() {
     if (currentWord) speakChinese(currentWord.hanzi);
   });
 
-  // Quiz Controls
+  // Flashcards Session Selector Controls
+  const bindSessionBtn = (btnId, sessionMode) => {
+    document.getElementById(btnId)?.addEventListener('click', () => {
+      vocabState.flashcardSession = sessionMode;
+      document.querySelectorAll('.session-pill-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(btnId)?.classList.add('active');
+      prepareFlashcards();
+    });
+  };
+  bindSessionBtn('sessionBtnNew', 'new');
+  bindSessionBtn('sessionBtnDue', 'due');
+
+  // Quiz Controls & Mode Selector
+  const bindQuizModeBtn = (btnId, mode) => {
+    document.getElementById(btnId)?.addEventListener('click', () => {
+      vocabState.quizMode = mode;
+      document.querySelectorAll('[data-quizmode]').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(btnId)?.classList.add('active');
+      generateQuizQuestion();
+    });
+  };
+  bindQuizModeBtn('quizModeZhVi', 'zh-to-vi');
+  bindQuizModeBtn('quizModeViZh', 'vi-to-zh');
+  bindQuizModeBtn('quizModeTyping', 'typing');
+
+  document.getElementById('quizRevealHintBtn')?.addEventListener('click', () => {
+    if (vocabState.quizHintCredits > 0 && vocabState.quizCurrentQuestion) {
+      vocabState.quizHintCredits--;
+      const elHintCount = document.getElementById('quizHintCountText');
+      if (elHintCount) elHintCount.textContent = `${vocabState.quizHintCredits}/3`;
+
+      // Reveal Pinyin in typing mode
+      const pinyinEl = document.getElementById('quizQuestionPinyin');
+      if (vocabState.quizCurrentQuestion.mode === 'typing' && pinyinEl) {
+        pinyinEl.style.display = 'block';
+        pinyinEl.textContent = `💡 Gợi ý Pinyin: ${vocabState.quizCurrentQuestion.correctPinyin || ''}`;
+      }
+
+      // Reveal Pinyin in option buttons for vi-to-zh mode
+      if (vocabState.quizCurrentQuestion.mode === 'vi-to-zh') {
+        document.querySelectorAll('.quiz-opt-pinyin').forEach(el => el.style.display = 'inline');
+      }
+
+      // Reveal Hán Việt in option buttons for zh-to-vi mode
+      if (vocabState.quizCurrentQuestion.mode === 'zh-to-vi') {
+        document.querySelectorAll('.quiz-opt-hanviet').forEach(el => el.style.display = 'inline');
+      }
+
+      const revealBtn = document.getElementById('quizRevealHintBtn');
+      if (revealBtn) revealBtn.style.display = 'none';
+    }
+  });
+
+  document.getElementById('quizTypingForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleTypingAnswer();
+  });
+
   document.getElementById('nextQuizBtn')?.addEventListener('click', generateQuizQuestion);
   document.getElementById('quizAudioBtn')?.addEventListener('click', () => {
     if (vocabState.quizCurrentQuestion) speakChinese(vocabState.quizCurrentQuestion.hanzi);
@@ -520,11 +580,9 @@ function getFilteredAndSortedVocab() {
 
   // Sorting
   entries.sort((a, b) => {
-    if (vocabState.sortBy === 'count-desc') {
-      return (b.count || 0) - (a.count || 0);
-    } else if (vocabState.sortBy === 'recent-desc') {
-      const timeA = a.last_seen ? new Date(a.last_seen).getTime() : 0;
-      const timeB = b.last_seen ? new Date(b.last_seen).getTime() : 0;
+    if (vocabState.sortBy === 'recent-desc') {
+      const timeA = a.last_seen ? new Date(a.last_seen).getTime() : (a.first_seen ? new Date(a.first_seen).getTime() : 0);
+      const timeB = b.last_seen ? new Date(b.last_seen).getTime() : (b.first_seen ? new Date(b.first_seen).getTime() : 0);
       return timeB - timeA;
     } else if (vocabState.sortBy === 'az') {
       return a.hanzi.localeCompare(b.hanzi, 'zh-Hans');
@@ -579,12 +637,17 @@ function renderDirectory() {
    VIEW 2: TOUCH SWIPE FLASHCARDS (ANKI SRS ENGINE)
    ========================================================================== */
 function prepareFlashcards() {
-  vocabState.flashcardList = Object.entries(vocabState.vocabulary).map(([hanzi, data]) => ({
-    hanzi,
-    ...data
-  }));
+  const now = new Date();
+  const allEntries = Object.entries(vocabState.vocabulary);
 
-  // Shuffle flashcards for effective learning
+  let filtered = allEntries;
+  if (vocabState.flashcardSession === 'new') {
+    filtered = allEntries.filter(([_, data]) => !data.next_review && !data.interval);
+  } else if (vocabState.flashcardSession === 'due') {
+    filtered = allEntries.filter(([_, data]) => data.next_review && new Date(data.next_review) <= now);
+  }
+
+  vocabState.flashcardList = filtered.map(([hanzi, data]) => ({ hanzi, ...data }));
   vocabState.flashcardList.sort(() => Math.random() - 0.5);
   vocabState.flashcardIndex = 0;
   vocabState.flashcardFlipped = false;
@@ -602,6 +665,10 @@ function renderCurrentFlashcard() {
   const total = vocabState.flashcardList.length;
   if (total === 0) {
     if (progressBar) progressBar.style.width = "0%";
+    document.getElementById('fcHanzi').textContent = '🎉 Hết bài';
+    document.getElementById('fcPinyin').textContent = '';
+    document.getElementById('fcHanViet').textContent = '';
+    document.getElementById('fcMeaning').textContent = 'Bạn đã hoàn thành phiên học này!';
     return;
   }
 
@@ -639,10 +706,7 @@ function renderCurrentFlashcard() {
   if (elEasy) elEasy.textContent = `${easyDays} ngày`;
 
   // Reset Stamps
-  const passStamp = document.querySelector('.stamp-pass');
-  const reviewStamp = document.querySelector('.stamp-review');
-  if (passStamp) passStamp.style.opacity = '0';
-  if (reviewStamp) reviewStamp.style.opacity = '0';
+  document.querySelectorAll('.swipe-stamp').forEach(el => el.style.opacity = '0');
 
   updateAnkiDeckStatus();
 }
@@ -696,13 +760,12 @@ function rateAnkiCard(rating) {
   };
 
   saveData();
-  passFlashcard(rating !== 'again');
+  passFlashcard(rating);
 }
 
 function updateAnkiDeckStatus() {
   const now = new Date();
   let newCount = 0;
-  let learnCount = 0;
   let dueCount = 0;
 
   Object.values(vocabState.vocabulary).forEach(item => {
@@ -710,18 +773,14 @@ function updateAnkiDeckStatus() {
       newCount++;
     } else if (item.next_review && new Date(item.next_review) <= now) {
       dueCount++;
-    } else {
-      learnCount++;
     }
   });
 
-  const elNew = document.getElementById('ankiNewCount');
-  const elLearn = document.getElementById('ankiLearnCount');
-  const elDue = document.getElementById('ankiDueCount');
-
-  if (elNew) elNew.textContent = `🔵 ${newCount} Mới`;
-  if (elLearn) elLearn.textContent = `🟠 ${learnCount} Đang học`;
-  if (elDue) elDue.textContent = `🟢 ${dueCount} Đến hạn`;
+  // Update Session Pill Counts
+  const elNewCount = document.getElementById('countSessionNew');
+  const elDueCount = document.getElementById('countSessionDue');
+  if (elNewCount) elNewCount.textContent = newCount.toString();
+  if (elDueCount) elDueCount.textContent = dueCount.toString();
 }
 
 function flipFlashcard() {
@@ -733,16 +792,33 @@ function flipFlashcard() {
   card.style.transform = vocabState.flashcardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)';
 }
 
-function passFlashcard(isPass) {
+function passFlashcard(direction = 'good') {
   const card = document.getElementById('swipeFlashcard');
   if (!card) return;
 
-  const targetX = isPass ? 400 : -400;
-  const rotation = isPass ? 25 : -25;
+  let targetX = 0;
+  let targetY = 0;
+  let rotation = 0;
+
+  if (direction === 'again' || direction === 'left') {
+    targetX = -450;
+    rotation = -20;
+  } else if (direction === 'easy' || direction === 'right') {
+    targetX = 450;
+    rotation = 20;
+  } else if (direction === 'good' || direction === 'up') {
+    targetY = -450;
+  } else if (direction === 'hard' || direction === 'down') {
+    targetY = 450;
+  } else {
+    targetX = 450;
+    rotation = 20;
+  }
+
   const currentFlip = vocabState.flashcardFlipped ? 'rotateY(180deg)' : '';
 
   card.style.transition = 'transform 0.35s ease-out, opacity 0.35s ease-out';
-  card.style.transform = `translate3d(${targetX}px, 0, 0) rotate(${rotation}deg) ${currentFlip}`;
+  card.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) rotate(${rotation}deg) ${currentFlip}`;
   card.style.opacity = '0';
 
   setTimeout(() => {
@@ -752,16 +828,28 @@ function passFlashcard(isPass) {
   }, 350);
 }
 
-/* TOUCH DRAG SWIPE ENGINE */
+/* TOUCH DRAG SWIPE ENGINE (4-WAY DIRECTIONAL ANKI SWIPING) */
 function initTouchSwipe() {
   const card = document.getElementById('swipeFlashcard');
   const stage = document.querySelector('.flashcard-stage');
   if (!card || !stage) return;
 
-  const passStamp = document.querySelector('.stamp-pass');
-  const reviewStamp = document.querySelector('.stamp-review');
+  const stampAgain = document.querySelector('.stamp-again');
+  const stampEasy = document.querySelector('.stamp-easy');
+  const stampGood = document.querySelector('.stamp-good');
+  const stampHard = document.querySelector('.stamp-hard');
+
+  const hideAllStamps = () => {
+    if (stampAgain) stampAgain.style.opacity = '0';
+    if (stampEasy) stampEasy.style.opacity = '0';
+    if (stampGood) stampGood.style.opacity = '0';
+    if (stampHard) stampHard.style.opacity = '0';
+  };
 
   const onStart = (e) => {
+    if (e.target.closest('#fcAudioBtn') || e.target.closest('.ios-audio-btn')) {
+      return; // Ignore card drag/flip when tapping the speaker audio button!
+    }
     vocabState.isDragging = true;
     const touch = e.touches ? e.touches[0] : e;
     vocabState.startX = touch.clientX;
@@ -777,30 +865,56 @@ function initTouchSwipe() {
     vocabState.currentX = touch.clientX - vocabState.startX;
     vocabState.currentY = touch.clientY - vocabState.startY;
 
+    if (e.cancelable) e.preventDefault(); // Prevent touch scrolling during card drag
+
     const rotation = vocabState.currentX / 15;
     const baseFlip = vocabState.flashcardFlipped ? 'rotateY(180deg)' : '';
-    card.style.transform = `translate3d(${vocabState.currentX}px, ${vocabState.currentY * 0.3}px, 0) rotate(${rotation}deg) ${baseFlip}`;
+    card.style.transform = `translate3d(${vocabState.currentX}px, ${vocabState.currentY}px, 0) rotate(${rotation}deg) ${baseFlip}`;
 
-    // Opacity stamps logic
-    const passRatio = Math.min(Math.max(vocabState.currentX / 100, 0), 1);
-    const reviewRatio = Math.min(Math.max(-vocabState.currentX / 100, 0), 1);
+    // Opacity 4-Direction Stamps logic
+    hideAllStamps();
 
-    if (passStamp) passStamp.style.opacity = passRatio.toString();
-    if (reviewStamp) reviewStamp.style.opacity = reviewRatio.toString();
+    const absX = Math.abs(vocabState.currentX);
+    const absY = Math.abs(vocabState.currentY);
+
+    if (absX > absY) {
+      if (vocabState.currentX < -30 && stampAgain) {
+        stampAgain.style.opacity = Math.min(absX / 80, 1).toString();
+      } else if (vocabState.currentX > 30 && stampEasy) {
+        stampEasy.style.opacity = Math.min(absX / 80, 1).toString();
+      }
+    } else {
+      if (vocabState.currentY < -30 && stampGood) {
+        stampGood.style.opacity = Math.min(absY / 80, 1).toString();
+      } else if (vocabState.currentY > 30 && stampHard) {
+        stampHard.style.opacity = Math.min(absY / 80, 1).toString();
+      }
+    }
   };
 
   const onEnd = () => {
     if (!vocabState.isDragging) return;
     vocabState.isDragging = false;
+    hideAllStamps();
 
-    if (passStamp) passStamp.style.opacity = '0';
-    if (reviewStamp) reviewStamp.style.opacity = '0';
+    const absX = Math.abs(vocabState.currentX);
+    const absY = Math.abs(vocabState.currentY);
 
-    if (vocabState.currentX > 100) {
-      passFlashcard(true); // Swipe Right Pass
-    } else if (vocabState.currentX < -100) {
-      passFlashcard(false); // Swipe Left Review
-    } else if (Math.abs(vocabState.currentX) < 8 && Math.abs(vocabState.currentY) < 8) {
+    if (absX > 60 || absY > 60) {
+      if (absX > absY) {
+        if (vocabState.currentX < -60) {
+          rateAnkiCard('again'); // Swipe Left = Again / Học lại 🔴
+        } else if (vocabState.currentX > 60) {
+          rateAnkiCard('easy'); // Swipe Right = Easy / Dễ 🔵
+        }
+      } else {
+        if (vocabState.currentY < -60) {
+          rateAnkiCard('good'); // Swipe Up = Good / Tốt 🟢
+        } else if (vocabState.currentY > 60) {
+          rateAnkiCard('hard'); // Swipe Down = Hard / Khó 🟠
+        }
+      }
+    } else if (absX < 8 && absY < 8) {
       flipFlashcard(); // Tap Flip
     } else {
       // Snap back
@@ -814,7 +928,7 @@ function initTouchSwipe() {
 
   // Touch Events for Mobile/iOS
   stage.addEventListener('touchstart', onStart, { passive: true });
-  stage.addEventListener('touchmove', onMove, { passive: true });
+  stage.addEventListener('touchmove', onMove, { passive: false });
   stage.addEventListener('touchend', onEnd);
 
   // Mouse Events for Desktop Testing
@@ -824,7 +938,7 @@ function initTouchSwipe() {
 }
 
 /* ==========================================================================
-   VIEW 3: TRẮC NGHIỆM (QUIZ ENGINE)
+   VIEW 3: TRẮC NGHIỆM ĐA DẠNG & LUYỆN GÕ (DIVERSE QUIZ & TYPING ENGINE)
    ========================================================================== */
 function generateQuizQuestion() {
   const keys = Object.keys(vocabState.vocabulary);
@@ -836,11 +950,19 @@ function generateQuizQuestion() {
   vocabState.quizAnswered = false;
   document.getElementById('nextQuizBtn').style.display = 'none';
 
-  // Pick target word
+  const feedbackBox = document.getElementById('quizFeedbackBox');
+  if (feedbackBox) feedbackBox.style.display = 'none';
+
+  const typingForm = document.getElementById('quizTypingForm');
+  const optionsContainer = document.getElementById('quizOptionsContainer');
+  const typingInput = document.getElementById('quizTypingInput');
+  if (typingInput) typingInput.value = '';
+
+  // Pick Target Word
   const correctKey = keys[Math.floor(Math.random() * keys.length)];
   const correctItem = { hanzi: correctKey, ...vocabState.vocabulary[correctKey] };
 
-  // Pick 3 distractors
+  // Pick 3 Distractors
   const distractors = [];
   while (distractors.length < Math.min(3, keys.length - 1)) {
     const rKey = keys[Math.floor(Math.random() * keys.length)];
@@ -849,28 +971,135 @@ function generateQuizQuestion() {
     }
   }
 
-  // Build Options List
   const options = [correctItem, ...distractors.map(k => ({ hanzi: k, ...vocabState.vocabulary[k] }))];
   options.sort(() => Math.random() - 0.5);
 
+  // Randomize Quiz Mode for Maximum Challenge! (Zh->Vi, Vi->Zh, Typing)
+  const quizModes = ['zh-to-vi', 'vi-to-zh', 'typing'];
+  const mode = quizModes[Math.floor(Math.random() * quizModes.length)];
+
   vocabState.quizCurrentQuestion = {
+    mode,
     correctHanzi: correctKey,
     correctMeaning: correctItem.meaning,
-    hanzi: correctItem.hanzi,
-    pinyin: correctItem.pinyin,
+    correctPinyin: correctItem.pinyin,
+    correctHanViet: correctItem.han_viet,
     options
   };
 
-  // Render Question
-  document.getElementById('quizQuestionHanzi').textContent = correctItem.hanzi;
-  document.getElementById('quizQuestionPinyin').textContent = correctItem.pinyin || '';
+  const tagEl = document.getElementById('quizTypeTag');
+  const hanziEl = document.getElementById('quizQuestionHanzi');
+  const pinyinEl = document.getElementById('quizQuestionPinyin');
+  const revealBtn = document.getElementById('quizRevealHintBtn');
+  const hintCountEl = document.getElementById('quizHintCountText');
 
-  const optionsContainer = document.getElementById('quizOptionsContainer');
-  optionsContainer.innerHTML = options.map(opt => `
-    <button class="quiz-option-btn" onclick="handleQuizAnswer('${escapeHtml(opt.hanzi)}')">
-      ${escapeHtml(opt.meaning || opt.pinyin || opt.hanzi)}
-    </button>
-  `).join('');
+  if (hintCountEl) hintCountEl.textContent = `${vocabState.quizHintCredits}/3`;
+  if (revealBtn) revealBtn.style.display = 'none';
+
+  if (mode === 'zh-to-vi') {
+    // Mode 1: Trung ➔ Việt (Display Hanzi + Pinyin -> Pick Meaning, Hint = Hán Việt)
+    if (tagEl) tagEl.textContent = '🇨🇳 ➔ 🇻🇳 Chọn nghĩa tiếng Việt đúng:';
+    if (hanziEl) hanziEl.textContent = correctItem.hanzi;
+    if (pinyinEl) {
+      pinyinEl.style.display = 'block';
+      pinyinEl.textContent = correctItem.pinyin || '';
+    }
+
+    if (optionsContainer) {
+      optionsContainer.style.display = 'flex';
+      optionsContainer.innerHTML = options.map(opt => `
+        <button class="quiz-option-btn" data-hanzi="${escapeHtml(opt.hanzi)}" onclick="handleQuizAnswer('${escapeHtml(opt.hanzi)}')">
+          <span class="quiz-opt-text">${escapeHtml(opt.meaning || opt.pinyin || opt.hanzi)}</span>
+          <span class="quiz-opt-hanviet" style="display: none; color: var(--accent-purple); margin-left: 8px;">(Hán Việt: ${escapeHtml(opt.han_viet || 'N/A')})</span>
+          <span class="quiz-opt-extra" style="display: none; color: var(--accent-warning); margin-left: 8px;">(${escapeHtml(opt.hanzi)} - ${escapeHtml(opt.pinyin || '')})</span>
+        </button>
+      `).join('');
+    }
+
+    if (revealBtn) {
+      revealBtn.style.display = 'inline-block';
+      if (vocabState.quizHintCredits > 0) {
+        revealBtn.disabled = false;
+        revealBtn.textContent = `💡 Xem gợi ý Hán Việt (Còn ${vocabState.quizHintCredits}/3)`;
+      } else {
+        revealBtn.disabled = true;
+        revealBtn.textContent = '🔒 Đã hết lượt gợi ý (0/3)';
+      }
+    }
+
+    if (typingForm) typingForm.style.display = 'none';
+
+  } else if (mode === 'vi-to-zh') {
+    // Mode 2: Việt ➔ Trung (Display Meaning -> Hide Pinyin initially until hint or answer)
+    if (tagEl) tagEl.textContent = '🇻🇳 ➔ 🇨🇳 Chọn từ Hán tự tiếng Trung đúng:';
+    if (hanziEl) hanziEl.textContent = correctItem.meaning || correctItem.hanzi;
+    if (pinyinEl) {
+      pinyinEl.style.display = 'block';
+      pinyinEl.textContent = correctItem.han_viet ? `Hán Việt: ${correctItem.han_viet}` : '';
+    }
+
+    if (optionsContainer) {
+      optionsContainer.style.display = 'flex';
+      optionsContainer.innerHTML = options.map(opt => `
+        <button class="quiz-option-btn" data-hanzi="${escapeHtml(opt.hanzi)}" onclick="handleQuizAnswer('${escapeHtml(opt.hanzi)}')">
+          <span style="font-size: 1.1rem; font-weight: 700;">${escapeHtml(opt.hanzi)}</span>
+          <span class="quiz-opt-pinyin" style="display: none; color: var(--accent-warning); margin-left: 8px;">(${escapeHtml(opt.pinyin || '')})</span>
+          <span class="quiz-opt-meaning" style="display: none; color: var(--text-secondary); margin-left: 8px;">- ${escapeHtml(opt.meaning || '')}</span>
+        </button>
+      `).join('');
+    }
+
+    if (revealBtn) {
+      revealBtn.style.display = 'inline-block';
+      if (vocabState.quizHintCredits > 0) {
+        revealBtn.disabled = false;
+        revealBtn.textContent = `💡 Xem gợi ý Pinyin (Còn ${vocabState.quizHintCredits}/3)`;
+      } else {
+        revealBtn.disabled = true;
+        revealBtn.textContent = '🔒 Đã hết lượt gợi ý (0/3)';
+      }
+    }
+
+    if (typingForm) typingForm.style.display = 'none';
+
+  } else if (mode === 'typing') {
+    // Mode 3: Gõ từ Trung (Display Meaning -> Hide Pinyin behind 3 Hint Credits limit)
+    if (tagEl) tagEl.textContent = '✍️ Gõ Hán tự tiếng Trung tương ứng:';
+    if (hanziEl) hanziEl.textContent = correctItem.meaning;
+    if (pinyinEl) pinyinEl.style.display = 'none'; // Hidden by default
+
+    if (revealBtn) {
+      revealBtn.style.display = 'inline-block';
+      if (vocabState.quizHintCredits > 0) {
+        revealBtn.disabled = false;
+        revealBtn.textContent = `💡 Xem gợi ý Pinyin (Còn ${vocabState.quizHintCredits}/3)`;
+      } else {
+        revealBtn.disabled = true;
+        revealBtn.textContent = '🔒 Đã hết lượt gợi ý (0/3)';
+      }
+    }
+
+    if (optionsContainer) optionsContainer.style.display = 'none';
+    if (typingForm) typingForm.style.display = 'flex';
+    if (typingInput) setTimeout(() => typingInput.focus(), 100);
+  }
+}
+
+function checkQuizStreakReward() {
+  const streak = vocabState.quizStreak;
+  const rewardMilestones = [5, 10, 20, 30, 50];
+  if (rewardMilestones.includes(streak)) {
+    vocabState.quizHintCredits++;
+    const hintCountEl = document.getElementById('quizHintCountText');
+    if (hintCountEl) hintCountEl.textContent = `${vocabState.quizHintCredits}`;
+
+    const feedbackBox = document.getElementById('quizFeedbackBox');
+    if (feedbackBox) {
+      feedbackBox.style.display = 'block';
+      feedbackBox.className = 'quiz-feedback-box correct';
+      feedbackBox.innerHTML = `🎁 <strong>Thưởng chuỗi 🔥 ${streak}!</strong> Bạn vừa nhận được <strong>+1 lượt Gợi ý 💡</strong>! (Hiện có: ${vocabState.quizHintCredits} lượt)`;
+    }
+  }
 }
 
 function handleQuizAnswer(selectedHanzi) {
@@ -884,25 +1113,79 @@ function handleQuizAnswer(selectedHanzi) {
   if (isCorrect) {
     vocabState.quizScore += 10;
     vocabState.quizStreak++;
+    checkQuizStreakReward();
   } else {
     vocabState.quizStreak = 0;
+    vocabState.quizHintCredits = 3; // Reset 3 Hint Credits on Streak Break!
   }
 
   // Update Score Board
   document.getElementById('quizScoreText').textContent = vocabState.quizScore;
   document.getElementById('quizStreakText').textContent = vocabState.quizStreak;
   document.getElementById('quizTotalText').textContent = vocabState.quizTotal;
+  const hintCountEl = document.getElementById('quizHintCountText');
+  if (hintCountEl) hintCountEl.textContent = `${vocabState.quizHintCredits}`;
+
+  // Hide Reveal Hint Button after answering
+  const revealBtn = document.getElementById('quizRevealHintBtn');
+  if (revealBtn) revealBtn.style.display = 'none';
+
+  // Reveal Pinyin & Meaning for ALL 4 options so learner learns from all choices
+  document.querySelectorAll('.quiz-opt-pinyin, .quiz-opt-meaning, .quiz-opt-extra, .quiz-opt-hanviet').forEach(el => {
+    el.style.display = 'inline';
+  });
 
   // Highlight Options
   const optionBtns = document.querySelectorAll('.quiz-option-btn');
   optionBtns.forEach(btn => {
-    const btnText = btn.textContent.trim();
-    if (q.options.find(o => o.hanzi === q.correctHanzi && (o.meaning === btnText || o.pinyin === btnText || o.hanzi === btnText))) {
+    const hanziAttr = btn.getAttribute('data-hanzi');
+    if (hanziAttr === q.correctHanzi) {
       btn.classList.add('correct');
-    } else if (q.options.find(o => o.hanzi === selectedHanzi && (o.meaning === btnText || o.pinyin === btnText || o.hanzi === btnText))) {
+    } else if (hanziAttr === selectedHanzi) {
       btn.classList.add('wrong');
     }
   });
+
+  document.getElementById('nextQuizBtn').style.display = 'inline-flex';
+}
+
+function handleTypingAnswer() {
+  if (vocabState.quizAnswered) return;
+  vocabState.quizAnswered = true;
+
+  const q = vocabState.quizCurrentQuestion;
+  const input = document.getElementById('quizTypingInput');
+  const typedVal = input ? input.value.trim() : '';
+
+  const isCorrect = typedVal === q.correctHanzi;
+  vocabState.quizTotal++;
+  if (isCorrect) {
+    vocabState.quizScore += 10;
+    vocabState.quizStreak++;
+    checkQuizStreakReward();
+  } else {
+    vocabState.quizStreak = 0;
+    vocabState.quizHintCredits = 3; // Reset 3 Hint Credits on Streak Break!
+  }
+
+  document.getElementById('quizScoreText').textContent = vocabState.quizScore;
+  document.getElementById('quizStreakText').textContent = vocabState.quizStreak;
+  document.getElementById('quizTotalText').textContent = vocabState.quizTotal;
+  const hintCountEl = document.getElementById('quizHintCountText');
+  if (hintCountEl) hintCountEl.textContent = `${vocabState.quizHintCredits}`;
+
+  const rewardMilestones = [5, 10, 20, 30, 50];
+  const feedbackBox = document.getElementById('quizFeedbackBox');
+  if (feedbackBox && (!isCorrect || !rewardMilestones.includes(vocabState.quizStreak))) {
+    feedbackBox.style.display = 'block';
+    if (isCorrect) {
+      feedbackBox.className = 'quiz-feedback-box correct';
+      feedbackBox.innerHTML = `🎉 Chính xác! <strong>${escapeHtml(q.correctHanzi)}</strong> (${escapeHtml(q.correctPinyin)})`;
+    } else {
+      feedbackBox.className = 'quiz-feedback-box wrong';
+      feedbackBox.innerHTML = `❌ Chưa đúng! Đáp án chuẩn: <strong>${escapeHtml(q.correctHanzi)}</strong> (${escapeHtml(q.correctPinyin)})`;
+    }
+  }
 
   document.getElementById('nextQuizBtn').style.display = 'inline-flex';
 }
@@ -913,24 +1196,92 @@ function handleQuizAnswer(selectedHanzi) {
 function renderStats() {
   const entries = Object.entries(vocabState.vocabulary);
   const totalWords = entries.length;
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const in7Days = new Date(now);
+  in7Days.setDate(in7Days.getDate() + 7);
 
-  let totalEncountered = 0;
+  let learnedWords = 0;
+  let newWords = 0;
+  let masteredWords = 0; // interval >= 90 (Trí nhớ dài hạn >3 tháng)
+  let learningWords = 0; // interval > 0 && interval < 90
+
+  let dueToday = 0;
+  let dueTomorrow = 0;
+  let dueNext7Days = 0;
+  let dueLongTerm = 0; // interval >= 90 (Lịch ôn >3 tháng)
+
   entries.forEach(([_, val]) => {
-    totalEncountered += (val.count || 1);
+    const isNew = !val.next_review && !val.interval;
+    if (isNew) {
+      newWords++;
+    } else {
+      learnedWords++;
+      const interval = val.interval || 0;
+      if (interval >= 90) {
+        masteredWords++;
+        dueLongTerm++;
+      } else {
+        learningWords++;
+        if (val.next_review) {
+          const reviewDate = new Date(val.next_review);
+          if (reviewDate <= now) {
+            dueToday++;
+          } else if (reviewDate <= tomorrow) {
+            dueTomorrow++;
+          } else if (reviewDate <= in7Days) {
+            dueNext7Days++;
+          }
+        }
+      }
+    }
   });
 
-  const avgCount = totalWords > 0 ? (totalEncountered / totalWords).toFixed(1) : 0;
-  const masteredCount = entries.filter(([_, val]) => (val.count || 1) >= 5).length;
+  const masteredCount = masteredWords;
   const masteryRate = totalWords > 0 ? Math.round((masteredCount / totalWords) * 100) : 0;
+  const newPct = totalWords > 0 ? ((newWords / totalWords) * 100).toFixed(1) : 0;
+  const learnPct = totalWords > 0 ? ((learningWords / totalWords) * 100).toFixed(1) : 0;
+  const masterPct = totalWords > 0 ? ((masteredWords / totalWords) * 100).toFixed(1) : 0;
 
+  // Key Metrics
   document.getElementById('statTotalWords').textContent = totalWords;
-  document.getElementById('statTotalEncountered').textContent = totalEncountered;
-  document.getElementById('statAvgCount').textContent = avgCount;
-  document.getElementById('statMasteryRate').textContent = `${masteryRate}%`;
+  document.getElementById('statLearnedWords').textContent = learnedWords;
+  document.getElementById('statNewWords').textContent = newWords;
+  document.getElementById('statDueToday').textContent = dueToday;
 
-  // Top 5 words
+  // Progress Bar & Legend
+  document.getElementById('statMasteryRate').textContent = `${masteryRate}% Thuộc bài`;
+  
+  const barNew = document.getElementById('barNew');
+  const barLearning = document.getElementById('barLearning');
+  const barMastered = document.getElementById('barMastered');
+  if (barNew) barNew.style.width = `${newPct}%`;
+  if (barLearning) barLearning.style.width = `${learnPct}%`;
+  if (barMastered) barMastered.style.width = `${masterPct}%`;
+
+  const elValNew = document.getElementById('valNewWords');
+  const elValLearn = document.getElementById('valLearningWords');
+  const elValMaster = document.getElementById('valMasteredWords');
+  if (elValNew) elValNew.textContent = `${newWords} từ (${newPct}%)`;
+  if (elValLearn) elValLearn.textContent = `${learningWords} từ (${learnPct}%)`;
+  if (elValMaster) elValMaster.textContent = `${masteredWords} từ (${masterPct}%)`;
+
+  // Forecast Schedule
+  const elToday = document.getElementById('forecastToday');
+  const elTomorrow = document.getElementById('forecastTomorrow');
+  const el7Days = document.getElementById('forecastNext7Days');
+  const elLongTerm = document.getElementById('forecastLongTerm');
+  if (elToday) elToday.textContent = `${dueToday} từ`;
+  if (elTomorrow) elTomorrow.textContent = `${dueTomorrow} từ`;
+  if (el7Days) el7Days.textContent = `${dueNext7Days} từ`;
+  if (elLongTerm) elLongTerm.textContent = `${dueLongTerm} từ`;
+
+  // Heatmap & Streak render
+  renderAnkiHeatmap();
+
+  // Top words
   const sorted = [...entries].sort((a, b) => (b[1].count || 0) - (a[1].count || 0)).slice(0, 5);
-
   const topListEl = document.getElementById('topWordsList');
   if (topListEl) {
     topListEl.innerHTML = sorted.map(([hanzi, val]) => `

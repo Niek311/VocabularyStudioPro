@@ -553,6 +553,40 @@ html, body {
   font-size: 0.75rem;
 }
 
+/* Session Filter Selector (Segmented Pill Bar) */
+.flashcard-session-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.session-pill-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.session-pill-btn.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35);
+}
+
 .flashcard-progress-bar-track {
   height: 6px;
   background: var(--border-color);
@@ -677,7 +711,6 @@ html, body {
 /* Swipe Stamps */
 .swipe-stamp {
   position: absolute;
-  top: 30px;
   padding: 8px 16px;
   border-radius: var(--radius-md);
   font-weight: 800;
@@ -687,20 +720,40 @@ html, body {
   pointer-events: none;
   transition: opacity 0.15s ease;
   z-index: 10;
+  background: var(--bg-card);
 }
 
-.stamp-pass {
-  right: 30px;
-  color: var(--accent-success);
-  border-color: var(--accent-success);
-  transform: rotate(12deg);
-}
-
-.stamp-review {
-  left: 30px;
+.stamp-again {
+  left: 20px;
+  top: 25px;
   color: var(--accent-danger);
   border-color: var(--accent-danger);
   transform: rotate(-12deg);
+}
+
+.stamp-easy {
+  right: 20px;
+  top: 25px;
+  color: #007aff;
+  border-color: #007aff;
+  transform: rotate(12deg);
+}
+
+.stamp-good {
+  left: 50%;
+  top: 25px;
+  color: var(--accent-success);
+  border-color: var(--accent-success);
+  transform: translateX(-50%) rotate(0deg);
+}
+
+.stamp-hard {
+  left: 50%;
+  bottom: 25px;
+  top: auto;
+  color: #ff9500;
+  border-color: #ff9500;
+  transform: translateX(-50%) rotate(0deg);
 }
 
 /* Flashcard Controls */
@@ -848,6 +901,82 @@ html, body {
   padding: 12px;
 }
 
+.quiz-hint-btn {
+  display: inline-block;
+  margin: 6px auto 16px auto;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 149, 0, 0.15);
+  border: 1px solid var(--accent-warning);
+  color: var(--accent-warning);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quiz-hint-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 149, 0, 0.25);
+}
+
+.quiz-hint-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border-color);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Quiz Typing Box & Feedback */
+.quiz-typing-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+#quizTypingInput {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+#quizTypingInput:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(10, 132, 255, 0.3);
+}
+
+.quiz-feedback-box {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  margin-top: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.quiz-feedback-box.correct {
+  background: rgba(52, 199, 89, 0.18);
+  border: 1px solid var(--accent-success);
+  color: var(--accent-success);
+}
+
+.quiz-feedback-box.wrong {
+  background: rgba(255, 39, 48, 0.18);
+  border: 1px solid var(--accent-danger);
+  color: var(--accent-danger);
+}
+
 /* VIEW 4: THỐNG KÊ (STATS) */
 .section-heading {
   font-size: 1.3rem;
@@ -898,6 +1027,98 @@ html, body {
 .stats-section-card h3 {
   font-size: 0.95rem;
   margin-bottom: 12px;
+}
+
+/* Mastery Progress Track & Segments */
+.mastery-progress-track {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  display: flex;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.mastery-bar-segment {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.seg-new {
+  background: var(--accent-warning);
+}
+
+.seg-learning {
+  background: var(--accent-primary);
+}
+
+.seg-mastered {
+  background: var(--accent-success);
+}
+
+.mastery-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-new { background: var(--accent-warning); }
+.dot-learning { background: var(--accent-primary); }
+.dot-mastered { background: var(--accent-success); }
+
+/* Forecast Schedule List */
+.forecast-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.forecast-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+
+.forecast-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.forecast-badge {
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.badge-due-today {
+  background: rgba(52, 199, 89, 0.2);
+  color: var(--accent-success);
+}
+
+.badge-long-term {
+  background: rgba(10, 132, 255, 0.2);
+  color: var(--accent-primary);
 }
 
 .top-words-list {

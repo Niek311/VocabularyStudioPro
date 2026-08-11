@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vocab-studio-ios-v1';
+const CACHE_NAME = 'vocab-studio-ios-v2.0.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

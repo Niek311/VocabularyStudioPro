@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Vocabulary Studio iOS</title>
-  <meta name="description" content="Ứng dụng Học & Quản lý Từ Vựng Tiếng Trung cao cấp dành riêng cho iOS (iPhone/iPad)">
+  <title>Vocabulary Studio iOS v2.0.0</title>
+  <meta name="description" content="Ứng dụng Học & Quản lý Từ Vựng Tiếng Trung cao cấp phiên bản v2.0.0 dành riêng cho iOS (iPhone/iPad)">
   
   <!-- iOS Native Web App Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -33,7 +33,7 @@
           <div class="ios-logo-badge">📖</div>
           <div class="ios-brand-text">
             <h1 class="ios-title">Vocabulary Studio</h1>
-            <span class="ios-subtitle">iOS Edition</span>
+            <span class="ios-subtitle">v2.0.0</span>
           </div>
         </div>
 
@@ -82,7 +82,6 @@
 
           <div class="ios-filter-row">
             <select id="sortSelect" class="ios-select">
-              <option value="count-desc">🔥 Gặp nhiều nhất</option>
               <option value="recent-desc">🕒 Gặp gần đây nhất</option>
               <option value="az">🔤 Từ A - Z</option>
             </select>
@@ -105,11 +104,12 @@
       <!-- VIEW 2: FLASHCARDS (TOUCH SWIPE) -->
       <section id="view-flashcards" class="tab-view">
         <div class="flashcards-header">
-          <div class="anki-deck-status">
-            <span class="anki-status-badge badge-new" id="ankiNewCount">🔵 0 Mới</span>
-            <span class="anki-status-badge badge-learning" id="ankiLearnCount">🟠 0 Đang học</span>
-            <span class="anki-status-badge badge-due" id="ankiDueCount">🟢 0 Đến hạn</span>
+          <!-- Session Filter Selector (2 Sessions: Từ mới, Đến hạn) -->
+          <div class="flashcard-session-selector">
+            <button class="session-pill-btn active" data-session="new" id="sessionBtnNew">🔵 Từ mới (<span id="countSessionNew">0</span>)</button>
+            <button class="session-pill-btn" data-session="due" id="sessionBtnDue">🟢 Đến hạn (<span id="countSessionDue">0</span>)</button>
           </div>
+
           <div class="flashcard-progress-bar-track" style="margin-top: 8px;">
             <div id="flashcardProgressBar" class="flashcard-progress-bar-fill" style="width: 0%;"></div>
           </div>
@@ -128,7 +128,7 @@
               </div>
               
               <div class="flashcard-main-word" id="fcHanzi">字</div>
-              <div class="flashcard-hint-text">Chạm hoặc vuốt lên để lật thẻ 👆</div>
+              <div class="flashcard-hint-text">Chạm vào thẻ để lật 👆</div>
             </div>
 
             <!-- Back Side -->
@@ -139,9 +139,11 @@
               <div class="flashcard-meaning" id="fcMeaning">Chữ, từ ngữ</div>
             </div>
 
-            <!-- Swipe Stamp Indicators -->
-            <div class="swipe-stamp stamp-pass">ĐÃ THUỘC ✨</div>
-            <div class="swipe-stamp stamp-review">CẦN ÔN 🔄</div>
+            <!-- Swipe Stamp Indicators (4 Directions: Left=Again, Right=Easy, Up=Good, Down=Hard) -->
+            <div class="swipe-stamp stamp-again">🔴 HỌC LẠI</div>
+            <div class="swipe-stamp stamp-easy">🔵 DỄ</div>
+            <div class="swipe-stamp stamp-good">🟢 TỐT</div>
+            <div class="swipe-stamp stamp-hard">🟠 KHÓ</div>
           </div>
         </div>
 
@@ -164,11 +166,11 @@
             <span class="anki-btn-label">🔵 Dễ</span>
           </button>
         </div>
-        <p class="ios-swipe-tip">💡 <i>Mẹo Anki:</i> Đánh giá phản xạ để thuật toán tự động tính lịch ôn tối ưu</p>
       </section>
 
-      <!-- VIEW 3: TRẮC NGHIỆM (QUIZ) -->
+      <!-- VIEW 3: TRẮC NGHIỆM HỖN HỢP & LUYỆN GÕ (RANDOMIZED MIXED QUIZ ENGINE) -->
       <section id="view-quiz" class="tab-view">
+
         <div class="quiz-status-card">
           <div class="quiz-stat-item">
             <span class="quiz-stat-label">Điểm số</span>
@@ -179,6 +181,10 @@
             <span class="quiz-stat-val" id="quizStreakText">0</span>
           </div>
           <div class="quiz-stat-item">
+            <span class="quiz-stat-label">Gợi ý 💡</span>
+            <span class="quiz-stat-val" id="quizHintCountText" style="color: var(--accent-warning);">3</span>
+          </div>
+          <div class="quiz-stat-item">
             <span class="quiz-stat-label">Số câu</span>
             <span class="quiz-stat-val" id="quizTotalText">0</span>
           </div>
@@ -187,7 +193,7 @@
         <!-- Question Card -->
         <div class="quiz-card">
           <div class="quiz-question-header">
-            <span class="quiz-type-tag">Chọn nghĩa đúng của từ:</span>
+            <span class="quiz-type-tag" id="quizTypeTag">Chọn nghĩa tiếng Việt đúng:</span>
             <button class="ios-audio-btn" id="quizAudioBtn" title="Phát âm">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
             </button>
@@ -195,10 +201,23 @@
 
           <div class="quiz-main-word" id="quizQuestionHanzi">由于</div>
           <div class="quiz-sub-pinyin" id="quizQuestionPinyin">yóu yú</div>
+          <button type="button" id="quizRevealHintBtn" class="quiz-hint-btn" style="display: none;">💡 Xem gợi ý Pinyin (Còn 3 lần)</button>
 
+          <!-- Multiple Choice Options Container -->
           <div id="quizOptionsContainer" class="quiz-options-list">
-            <!-- Dynamic Options Injected Here -->
+            <!-- Dynamic Choice Options Injected Here -->
           </div>
+
+          <!-- Typing Practice Input Container (Mode 3) -->
+          <form id="quizTypingForm" class="quiz-typing-box" style="display: none;">
+            <input type="text" id="quizTypingInput" placeholder="Gõ từ Hán tự tiếng Trung vào đây..." autocomplete="off">
+            <button type="submit" id="submitQuizTypingBtn" class="ios-btn-primary" style="margin-top: 10px; width: 100%;">
+              Kiểm tra 🎯
+            </button>
+          </form>
+
+          <!-- Feedback Result Box -->
+          <div id="quizFeedbackBox" class="quiz-feedback-box" style="display: none;"></div>
 
           <button id="nextQuizBtn" class="ios-btn-primary quiz-next-btn" style="display: none;">
             Câu tiếp theo ➔
@@ -206,9 +225,9 @@
         </div>
       </section>
 
-      <!-- VIEW 4: THỐNG KÊ ANKI HEATMAP & DASHBOARD -->
+      <!-- VIEW 4: THỐNG KÊ KHOA HỌC & TIẾN ĐỘ HỌC TẬP (STATS DASHBOARD) -->
       <section id="view-stats" class="tab-view">
-        <h2 class="section-heading">Thống kê & Chuỗi Học tập</h2>
+        <h2 class="section-heading">Thống kê & Tiến độ Học tập</h2>
         
         <!-- Streak Banner -->
         <div class="anki-streak-banner">
@@ -216,6 +235,74 @@
           <div>
             <div class="streak-count" id="ankiStreakCount">0 ngày liên tục</div>
             <div class="streak-sub">Duy trì ôn tập mỗi ngày để khắc sâu từ vựng</div>
+          </div>
+        </div>
+
+        <!-- Key Metrics Grid (4 Cards) -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">📚</div>
+            <div class="stat-num" id="statTotalWords">0</div>
+            <div class="stat-lbl">Tổng số từ vựng</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🎓</div>
+            <div class="stat-num" id="statLearnedWords" style="color: var(--accent-primary);">0</div>
+            <div class="stat-lbl">Đã học (Có tiến trình)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🆕</div>
+            <div class="stat-num" id="statNewWords" style="color: var(--accent-warning);">0</div>
+            <div class="stat-lbl">Từ mới chưa học</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🟢</div>
+            <div class="stat-num" id="statDueToday" style="color: var(--accent-success);">0</div>
+            <div class="stat-lbl">Đến hạn hôm nay</div>
+          </div>
+        </div>
+
+        <!-- Mastery Completion Rate Progress Card -->
+        <div class="stats-section-card" style="margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h3>Tỷ lệ thuộc bài & Phân bổ từ vựng</h3>
+            <span style="font-weight: 800; color: var(--accent-primary);" id="statMasteryRate">0%</span>
+          </div>
+          
+          <!-- Multi-Color Progress Bar -->
+          <div class="mastery-progress-track">
+            <div id="barNew" class="mastery-bar-segment seg-new" style="width: 0%;" title="Từ mới"></div>
+            <div id="barLearning" class="mastery-bar-segment seg-learning" style="width: 0%;" title="Đang học"></div>
+            <div id="barMastered" class="mastery-bar-segment seg-mastered" style="width: 0%;" title="Thành thục"></div>
+          </div>
+
+          <div class="mastery-legend">
+            <div class="legend-item"><span class="dot dot-new"></span> Từ mới chưa học: <strong id="valNewWords">0</strong></div>
+            <div class="legend-item"><span class="dot dot-learning"></span> Đang học ngắn hạn: <strong id="valLearningWords">0</strong></div>
+            <div class="legend-item"><span class="dot dot-mastered"></span> Thành thục dài hạn (>3 tháng): <strong id="valMasteredWords">0</strong></div>
+          </div>
+        </div>
+
+        <!-- Forecast Schedule Breakdown (Lịch đến hạn theo từng ngày) -->
+        <div class="stats-section-card" style="margin-bottom: 16px;">
+          <h3>📅 Lịch đến hạn ôn tập (Forecast)</h3>
+          <div class="forecast-list">
+            <div class="forecast-row">
+              <span class="forecast-label">⚡ Đến hạn Hôm nay:</span>
+              <span class="forecast-badge badge-due-today" id="forecastToday">0 từ</span>
+            </div>
+            <div class="forecast-row">
+              <span class="forecast-label">🕒 Đến hạn Ngày mai (+1d):</span>
+              <span class="forecast-badge" id="forecastTomorrow">0 từ</span>
+            </div>
+            <div class="forecast-row">
+              <span class="forecast-label">📅 Đến hạn trong 7 ngày tới:</span>
+              <span class="forecast-badge" id="forecastNext7Days">0 từ</span>
+            </div>
+            <div class="forecast-row">
+              <span class="forecast-label">🌟 Trí nhớ dài hạn (>3 tháng):</span>
+              <span class="forecast-badge badge-long-term" id="forecastLongTerm">0 từ</span>
+            </div>
           </div>
         </div>
 
@@ -241,31 +328,9 @@
           </div>
         </div>
 
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon">📚</div>
-            <div class="stat-num" id="statTotalWords">0</div>
-            <div class="stat-lbl">Tổng số từ vựng</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">⏰</div>
-            <div class="stat-num" id="statDueToday" style="color: var(--accent-warning);">0</div>
-            <div class="stat-lbl">Đến hạn ôn hôm nay</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">🏆</div>
-            <div class="stat-num" id="statMasteredWords" style="color: var(--accent-success);">0</div>
-            <div class="stat-lbl">Trí nhớ dài hạn (>30d)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">🎯</div>
-            <div class="stat-num" id="statMasteryRate">0%</div>
-            <div class="stat-lbl">Tỷ lệ thuộc bài</div>
-          </div>
-        </div>
-
+        <!-- Top Words Encountered / Studied -->
         <div class="stats-section-card">
-          <h3>Top 5 từ xuất hiện nhiều nhất</h3>
+          <h3>Top từ vựng cần lưu ý</h3>
           <div id="topWordsList" class="top-words-list">
             <!-- Dynamic top words -->
           </div>
