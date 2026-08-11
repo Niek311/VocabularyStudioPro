@@ -298,10 +298,12 @@ html, body {
 /* Main Content Router */
 .ios-main-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
-  padding-bottom: calc(var(--safe-area-bottom) + 90px);
+  padding-bottom: calc(var(--safe-area-bottom) + 75px);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   overscroll-behavior: contain;
@@ -313,7 +315,10 @@ html, body {
 }
 
 .tab-view.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100%;
 }
 
 @keyframes fadeIn {
@@ -612,9 +617,10 @@ html, body {
 .flashcard-stage {
   perspective: 1000px;
   width: 100%;
-  height: 340px;
+  flex: 1;
+  min-height: 380px;
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   touch-action: none; /* Disable default scrolling on stage for swipe drag */
 }
 
