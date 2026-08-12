@@ -706,7 +706,7 @@ function renderCurrentFlashcard() {
     updateAnkiDeckStatus();
     return;
   } else {
-    if (ratingControls) ratingControls.style.display = 'flex';
+    if (ratingControls) ratingControls.style.display = 'grid';
   }
 
   const current = vocabState.flashcardList[vocabState.flashcardIndex];
