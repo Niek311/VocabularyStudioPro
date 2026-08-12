@@ -679,17 +679,30 @@ function prepareFlashcards() {
 function renderCurrentFlashcard() {
   const card = document.getElementById('swipeFlashcard');
   const progressBar = document.getElementById('flashcardProgressBar');
+  const ratingControls = document.getElementById('ankiRatingControls');
 
   if (!card) return;
 
   const total = vocabState.flashcardList.length;
   if (total === 0) {
-    if (progressBar) progressBar.style.width = "0%";
+    if (progressBar) progressBar.style.width = "100%";
+    const sessionLabel = vocabState.flashcardSession === 'new' ? 'từ mới' : 'từ đến hạn';
+
     document.getElementById('fcHanzi').textContent = '🎉 Hết bài';
+    document.getElementById('fcCountBadge').textContent = '✨ Hoàn thành 100%';
     document.getElementById('fcPinyin').textContent = '';
     document.getElementById('fcHanViet').textContent = '';
-    document.getElementById('fcMeaning').textContent = 'Bạn đã hoàn thành phiên học này!';
+    document.getElementById('fcMeaning').innerHTML = `<div style="padding: 10px 0;"><p style="font-size: 1.1rem; color: var(--accent-success); font-weight: 700; margin-bottom: 8px;">Chúc mừng!</p><p>Bạn đã học hết toàn bộ <strong>${sessionLabel}</strong> trong phiên này.</p></div>`;
+
+    if (ratingControls) ratingControls.style.display = 'none';
+    card.classList.remove('flipped');
+    card.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+    vocabState.flashcardFlipped = false;
+
+    updateAnkiDeckStatus();
     return;
+  } else {
+    if (ratingControls) ratingControls.style.display = 'flex';
   }
 
   const current = vocabState.flashcardList[vocabState.flashcardIndex];
@@ -710,20 +723,30 @@ function renderCurrentFlashcard() {
   document.getElementById('fcMeaning').innerHTML = formatMeaningDisplay(current.meaning);
 
   // Update Anki Rating Dynamic Time Labels
-  const interval = current.interval || 0;
+  const isNewOrLearning = !current.next_review || current.interval === 0 || current.state === 'NEW' || current.state === 'LEARNING' || current.state === 'RELEARNING';
+  const oldInterval = current.interval || 0;
   const easeFactor = current.ease_factor || 2.5;
 
-  const hardDays = interval === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
-  const goodDays = interval === 0 ? 1 : Math.round(interval * easeFactor);
-  const easyDays = interval === 0 ? 4 : Math.round(interval * easeFactor * 1.3);
-
+  const elAgain = document.getElementById('timeAgainLabel');
   const elHard = document.getElementById('timeHardLabel');
   const elGood = document.getElementById('timeGoodLabel');
   const elEasy = document.getElementById('timeEasyLabel');
 
-  if (elHard) elHard.textContent = `${hardDays} ngày`;
-  if (elGood) elGood.textContent = `${goodDays} ngày`;
-  if (elEasy) elEasy.textContent = `${easyDays} ngày`;
+  if (isNewOrLearning) {
+    if (elAgain) elAgain.textContent = '1 phút';
+    if (elHard) elHard.textContent = '10 phút';
+    if (elGood) elGood.textContent = '1 ngày';
+    if (elEasy) elEasy.textContent = '4 ngày';
+  } else {
+    const hardDays = Math.max(1, Math.round(oldInterval * 1.2));
+    const goodDays = Math.max(1, Math.round(oldInterval * easeFactor));
+    const easyDays = Math.max(1, Math.round(oldInterval * easeFactor * 1.3));
+
+    if (elAgain) elAgain.textContent = '1 phút';
+    if (elHard) elHard.textContent = `${hardDays} ngày`;
+    if (elGood) elGood.textContent = `${goodDays} ngày`;
+    if (elEasy) elEasy.textContent = `${easyDays} ngày`;
+  }
 
   // Reset Stamps
   document.querySelectorAll('.swipe-stamp').forEach(el => el.style.opacity = '0');
@@ -739,29 +762,64 @@ function rateAnkiCard(rating) {
   const wordKey = currentItem.hanzi;
   const wordData = vocabState.vocabulary[wordKey] || currentItem;
 
-  let interval = wordData.interval || 0;
+  const oldInterval = wordData.interval || 0;
+  let interval = oldInterval;
   let easeFactor = wordData.ease_factor || 2.5;
+  let state = wordData.state || (!wordData.next_review && oldInterval === 0 ? 'NEW' : 'REVIEW');
+  let lapseCount = wordData.lapse_count || 0;
+  let reviewCount = (wordData.review_count || wordData.count || 0) + 1;
+
+  const isNewOrLearning = state === 'NEW' || state === 'LEARNING' || state === 'RELEARNING' || (!wordData.next_review && oldInterval === 0);
   const now = new Date();
-
-  if (rating === 'again') {
-    interval = 0;
-    easeFactor = Math.max(1.3, easeFactor - 0.2);
-  } else if (rating === 'hard') {
-    interval = interval === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
-    easeFactor = Math.max(1.3, easeFactor - 0.15);
-  } else if (rating === 'good') {
-    interval = interval === 0 ? 1 : Math.round(interval * easeFactor);
-  } else if (rating === 'easy') {
-    interval = interval === 0 ? 4 : Math.round(interval * easeFactor * 1.3);
-    easeFactor = easeFactor + 0.15;
-  }
-
-  // Calculate next review date
   const nextReviewDate = new Date();
-  if (interval === 0) {
-    nextReviewDate.setMinutes(nextReviewDate.getMinutes() + 1);
+
+  if (isNewOrLearning) {
+    // Rules for NEW / LEARNING Cards
+    if (rating === 'again') {
+      state = 'LEARNING';
+      interval = 0;
+      lapseCount++;
+      easeFactor = Math.max(1.3, easeFactor - 0.20);
+      nextReviewDate.setMinutes(nextReviewDate.getMinutes() + 1); // 1 min
+    } else if (rating === 'hard') {
+      state = 'LEARNING';
+      interval = 0;
+      easeFactor = Math.max(1.3, easeFactor - 0.15);
+      nextReviewDate.setMinutes(nextReviewDate.getMinutes() + 10); // 10 min
+    } else if (rating === 'good') {
+      state = 'REVIEW';
+      interval = 1; // 1 day
+      nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+    } else if (rating === 'easy') {
+      state = 'REVIEW';
+      interval = 4; // 4 days
+      easeFactor = easeFactor + 0.15;
+      nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+    }
   } else {
-    nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+    // Rules for REVIEW Cards (Graduated SRS)
+    if (rating === 'again') {
+      state = 'RELEARNING';
+      lapseCount++;
+      easeFactor = Math.max(1.3, easeFactor - 0.20);
+      // Smart Memory Retention: preserve 20% of previous long interval rather than destroying 50d down to 1d
+      interval = Math.max(1, Math.round(oldInterval * 0.20));
+      nextReviewDate.setMinutes(nextReviewDate.getMinutes() + 1);
+    } else if (rating === 'hard') {
+      state = 'REVIEW';
+      interval = Math.max(1, Math.round(oldInterval * 1.20));
+      easeFactor = Math.max(1.3, easeFactor - 0.15);
+      nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+    } else if (rating === 'good') {
+      state = 'REVIEW';
+      interval = Math.max(1, Math.round(oldInterval * easeFactor));
+      nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+    } else if (rating === 'easy') {
+      state = 'REVIEW';
+      interval = Math.max(1, Math.round(oldInterval * easeFactor * 1.30));
+      easeFactor = easeFactor + 0.15;
+      nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+    }
   }
 
   // Log study session into daily heatmap history
@@ -772,9 +830,12 @@ function rateAnkiCard(rating) {
   // Save word SRS stats
   vocabState.vocabulary[wordKey] = {
     ...wordData,
-    count: (wordData.count || 1) + 1,
+    state,
+    count: reviewCount,
+    review_count: reviewCount,
+    lapse_count: lapseCount,
     interval,
-    ease_factor: easeFactor,
+    ease_factor: parseFloat(easeFactor.toFixed(2)),
     next_review: nextReviewDate.toISOString(),
     last_seen: now.toISOString()
   };
@@ -849,7 +910,28 @@ function passFlashcard(direction = 'good') {
 
   setTimeout(() => {
     card.style.opacity = '1';
-    vocabState.flashcardIndex = (vocabState.flashcardIndex + 1) % vocabState.flashcardList.length;
+
+    // Dynamic Queue Re-Filtering & Graduation Logic
+    const currentItem = vocabState.flashcardList[vocabState.flashcardIndex];
+    if (currentItem) {
+      const liveData = vocabState.vocabulary[currentItem.hanzi] || currentItem;
+      const isGraduated = liveData.next_review && liveData.interval > 0 && liveData.state === 'REVIEW';
+
+      if (isGraduated || direction === 'good' || direction === 'easy') {
+        // Remove graduated card from active session queue
+        vocabState.flashcardList.splice(vocabState.flashcardIndex, 1);
+        if (vocabState.flashcardIndex >= vocabState.flashcardList.length) {
+          vocabState.flashcardIndex = 0;
+        }
+      } else {
+        // Re-queue card needing review (Again / Hard) to the back of the queue
+        if (vocabState.flashcardList.length > 1) {
+          const [relearnItem] = vocabState.flashcardList.splice(vocabState.flashcardIndex, 1);
+          vocabState.flashcardList.push(relearnItem);
+        }
+      }
+    }
+
     renderCurrentFlashcard();
   }, 350);
 }
