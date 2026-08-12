@@ -317,7 +317,9 @@ html, body {
 .tab-view.active {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   flex: 1;
+  width: 100%;
   min-height: 100%;
 }
 
@@ -1444,6 +1446,7 @@ html, body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+  width: 100%;
   margin-bottom: 12px;
 }
 
