@@ -298,7 +298,7 @@ html, body {
   flex: 1;
   width: 100%;
   padding: 16px;
-  padding-bottom: calc(var(--safe-area-bottom) + 95px);
+  padding-bottom: calc(var(--safe-area-bottom) + 120px);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -311,14 +311,6 @@ html, body {
 .tab-view.active {
   display: block;
   width: 100%;
-}
-
-#view-flashcards.active,
-#view-quiz.active {
-  display: flex;
-  flex-direction: column;
-  min-height: calc(100vh - 200px);
-  justify-content: space-between;
 }
 
 @keyframes fadeIn {
@@ -617,8 +609,8 @@ html, body {
 .flashcard-stage {
   perspective: 1000px;
   width: 100%;
-  flex: 1;
-  min-height: 380px;
+  height: 360px;
+  max-height: 48dvh;
   position: relative;
   margin-bottom: 16px;
   touch-action: none; /* Disable default scrolling on stage for swipe drag */
@@ -834,15 +826,16 @@ html, body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 24px;
+  padding: 18px;
   box-shadow: var(--shadow-lg);
+  margin-bottom: 20px;
 }
 
 .quiz-question-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .quiz-type-tag {
@@ -853,35 +846,35 @@ html, body {
 
 .quiz-main-word {
   font-family: "Noto Sans SC", var(--font-family);
-  font-size: 2.8rem;
+  font-size: 2.2rem;
   font-weight: 800;
   text-align: center;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .quiz-sub-pinyin {
   text-align: center;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--accent-warning);
   font-weight: 600;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .quiz-options-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .quiz-option-btn {
   width: 100%;
-  padding: 14px 16px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
