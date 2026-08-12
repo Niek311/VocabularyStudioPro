@@ -408,6 +408,10 @@ function bindEvents() {
   document.getElementById('ankiEasyBtn')?.addEventListener('click', () => rateAnkiCard('easy'));
 
   // Flashcards Controls
+  document.getElementById('swipeFlashcard')?.addEventListener('click', (e) => {
+    if (e.target.closest('#fcAudioBtn') || e.target.closest('.ios-audio-btn')) return;
+    flipFlashcard();
+  });
   document.getElementById('fcFlipBtn')?.addEventListener('click', flipFlashcard);
   document.getElementById('fcPassBtn')?.addEventListener('click', () => passFlashcard(true));
   document.getElementById('fcReviewBtn')?.addEventListener('click', () => passFlashcard(false));
@@ -799,7 +803,13 @@ function updateAnkiDeckStatus() {
   if (elDueCount) elDueCount.textContent = dueCount.toString();
 }
 
+let lastFlashcardFlipTime = 0;
+
 function flipFlashcard() {
+  const now = Date.now();
+  if (now - lastFlashcardFlipTime < 300) return; // Debounce double-flips from touch+click events!
+  lastFlashcardFlipTime = now;
+
   const card = document.getElementById('swipeFlashcard');
   if (!card) return;
   vocabState.flashcardFlipped = !vocabState.flashcardFlipped;
@@ -930,8 +940,8 @@ function initTouchSwipe() {
           rateAnkiCard('hard'); // Swipe Down = Hard / Khó 🟠
         }
       }
-    } else if (absX < 8 && absY < 8) {
-      flipFlashcard(); // Tap Flip
+    } else if (absX < 25 && absY < 25) {
+      flipFlashcard(); // Tap Flip (guaranteed tap detection for mobile touchscreens)
     } else {
       // Snap back
       card.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
