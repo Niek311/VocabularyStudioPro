@@ -69,35 +69,33 @@
 }
 
 html, body {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-  overscroll-behavior-y: none;
+  overflow-x: hidden;
   font-family: var(--font-family);
   background-color: var(--bg-main);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Main App Container */
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
   position: relative;
-  overflow: hidden;
-  overscroll-behavior: none;
-  overscroll-behavior-y: none;
   background-color: var(--bg-main);
 }
 
 /* Top iOS Header */
 .ios-header {
+  position: sticky;
+  top: 0;
   padding-top: calc(var(--safe-area-top) + 8px);
   padding-left: 16px;
   padding-right: 16px;
@@ -297,15 +295,11 @@ html, body {
 
 /* Main Content Router */
 .ios-main-content {
-  flex: 1 1 0%;
-  min-height: 0; /* CRITICAL FOR WEBKIT FLEXBOX OVERFLOW SCROLLING ON IOS SAFARI */
-  height: 0; /* WebKit Flex Fix */
-  overflow-y: auto;
-  overflow-x: hidden;
+  flex: 1;
+  width: 100%;
   padding: 16px;
-  padding-bottom: calc(var(--safe-area-bottom) + 90px);
+  padding-bottom: calc(var(--safe-area-bottom) + 95px);
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
 }
 
 .tab-view {
@@ -1228,7 +1222,7 @@ html, body {
 
 /* Bottom iOS Navigation Bar */
 .ios-bottom-nav {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
