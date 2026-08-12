@@ -662,7 +662,11 @@ function prepareFlashcards() {
 
   let filtered = allEntries;
   if (vocabState.flashcardSession === 'new') {
-    filtered = allEntries.filter(([_, data]) => !data.next_review && !data.interval);
+    // Filter words that have NOT graduated to REVIEW (state === 'NEW' | 'LEARNING' or interval === 0 or !next_review)
+    filtered = allEntries.filter(([_, data]) => {
+      const isGraduated = data.interval && data.interval > 0 && data.state === 'REVIEW';
+      return !isGraduated;
+    });
   } else if (vocabState.flashcardSession === 'due') {
     filtered = allEntries.filter(([_, data]) => data.next_review && new Date(data.next_review) <= now);
   }
@@ -850,8 +854,9 @@ function updateAnkiDeckStatus() {
   let dueCount = 0;
 
   Object.values(vocabState.vocabulary).forEach(item => {
-    if (!item.next_review && !item.interval) {
-      newCount++;
+    const isGraduated = item.interval && item.interval > 0 && item.state === 'REVIEW';
+    if (!isGraduated) {
+      newCount++; // Un-graduated / Learning words stay in New/Learning count
     } else if (item.next_review && new Date(item.next_review) <= now) {
       dueCount++;
     }
