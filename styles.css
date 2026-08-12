@@ -297,14 +297,15 @@ html, body {
 
 /* Main Content Router */
 .ios-main-content {
-  flex: 1;
-  overflow-y: scroll;
+  flex: 1 1 0%;
+  min-height: 0; /* CRITICAL FOR WEBKIT FLEXBOX OVERFLOW SCROLLING ON IOS SAFARI */
+  height: 0; /* WebKit Flex Fix */
+  overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
   padding-bottom: calc(var(--safe-area-bottom) + 90px);
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  overscroll-behavior-y: contain;
 }
 
 .tab-view {
